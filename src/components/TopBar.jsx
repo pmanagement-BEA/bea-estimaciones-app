@@ -9,6 +9,12 @@ export default function TopBar({ profile, onSignOut }) {
         <span className="brand-sub">Estimaciones de Proyectos</span>
       </div>
       <div className="topbar-actions">
+        <button className="btn-ghost" style={{ color: 'rgba(255,255,255,.85)', fontSize: 12 }} onClick={() => navigate('/dashboard')}>
+          📊 Dashboard
+        </button>
+        <button className="btn-ghost" style={{ color: 'rgba(255,255,255,.85)', fontSize: 12 }} onClick={() => navigate('/')}>
+          Proyectos
+        </button>
         {profile && (
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,.7)' }}>
             {profile.nombre || profile.email}
