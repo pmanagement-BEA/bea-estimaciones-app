@@ -9,6 +9,7 @@ import Estimation from './pages/Estimation'
 import History from './pages/History'
 import Aditivas from './pages/Aditivas'
 import AditivaForm from './pages/AditivaForm'
+import Dashboard from './pages/Dashboard'
 
 function PrivateRoute({ children }) {
   const { session, loading } = useAuth()
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/projects/:id/setup" element={<PrivateRoute><ProjectSetup /></PrivateRoute>} />
         <Route path="/projects/:id/estimations/:estId" element={<PrivateRoute><Estimation /></PrivateRoute>} />
         <Route path="/projects/:id/history" element={<PrivateRoute><History /></PrivateRoute>} />
+        <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas" element={<PrivateRoute><Aditivas /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas/new" element={<PrivateRoute><AditivaForm /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas/:adId/edit" element={<PrivateRoute><AditivaForm /></PrivateRoute>} />
