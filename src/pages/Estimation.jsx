@@ -56,7 +56,13 @@ export default function Estimation() {
   const [saving, setSaving]           = useState(false)
   const [activeTab, setActiveTab]     = useState('estimation')
   const [modal, setModal]             = useState(null)
-  const saveTimer = useRef(null)
+  const [reportData, setReportData]   = useState(null)
+  const [reportSaving, setReportSaving] = useState(false)
+  const [togglModal, setTogglModal]   = useState(null) // { rows: [] }
+  const saveTimer       = useRef(null)
+  const reportSaveTimer = useRef(null)
+  const reportRef       = useRef(null)
+  const togglFileRef    = useRef(null)
 
   useEffect(() => { fetchAll() }, [id, estId])
 
@@ -107,6 +113,11 @@ export default function Estimation() {
         if (!itemMap[c.id]) itemMap[c.id] = { concept_id: c.id, included: false, amount: 0, parcial_enabled: false, pct_parcial: 0, delayed: false, cause: '' }
       }
     }
+
+    const rdRes = await supabase.from('report_data').select('*').eq('estimation_id', est.id).maybeSingle()
+    const rd = rdRes.data || null
+    setReportData(rd)
+    reportRef.current = rd
 
     setProject(projRes.data)
     setDisciplines(discs)
@@ -184,6 +195,141 @@ export default function Estimation() {
     if (error) { toast('Error al marcar como enviada', true); return }
     setEstimation(prev => ({ ...prev, status: 'Enviada' }))
     toast('Estimación marcada como Enviada ✓')
+  }
+
+  // ── Report helpers ─────────────────────────────────────────────────────────
+  function scheduleReportSave(updates) {
+    const next = { ...(reportRef.current || {}), ...updates }
+    setReportData(next)
+    reportRef.current = next
+    clearTimeout(reportSaveTimer.current)
+    reportSaveTimer.current = setTimeout(() => flushReportSave(next), 600)
+  }
+
+  async function flushReportSave(data) {
+    setReportSaving(true)
+    if (data.id) {
+      await supabase.from('report_data').update(data).eq('id', data.id)
+    } else {
+      const { data: created } = await supabase.from('report_data')
+        .insert({ estimation_id: estimation.id, ...data }).select().single()
+      if (created) { setReportData(created); reportRef.current = created }
+    }
+    setReportSaving(false)
+  }
+
+  function addReportRow(key) {
+    const defaults = {
+      acciones_realizadas:   { task: '', descripcion: '', fecha: '' },
+      acciones_pendientes:   { accion: '', fecha: '', responsable: 'BEA' },
+      informacion_pendiente: { texto: '', responsable: 'BEA' },
+      riesgos:               { riesgo: '', creditos: '' },
+      entregables:           { texto: '' },
+    }
+    const newRow = { id: crypto.randomUUID(), ...(defaults[key] || {}) }
+    const arr = [...(reportRef.current?.[key] || []), newRow]
+    scheduleReportSave({ [key]: arr })
+  }
+
+  function removeReportRow(key, rowId) {
+    const arr = (reportRef.current?.[key] || []).filter(r => r.id !== rowId)
+    scheduleReportSave({ [key]: arr })
+  }
+
+  function updateReportRow(key, rowId, field, value) {
+    const arr = (reportRef.current?.[key] || []).map(r => r.id === rowId ? { ...r, [field]: value } : r)
+    scheduleReportSave({ [key]: arr })
+  }
+
+  function handleTogglFile(event) {
+    const file = event.target.files[0]
+    if (!file) return
+    event.target.value = ''
+    const reader = new FileReader()
+    reader.onload = e => {
+      try {
+        const rows = parseTogglCSV(e.target.result)
+        if (!rows.length) { toast('No se encontraron entradas en el CSV', true); return }
+        setTogglModal({ rows })
+      } catch (err) {
+        toast('Error al leer el CSV: ' + err.message, true)
+      }
+    }
+    reader.readAsText(file, 'UTF-8')
+  }
+
+  function parseTogglCSV(text) {
+    text = text.replace(/^﻿/, '')
+    const lines = text.split(/\r?\n/).filter(l => l.trim())
+    if (lines.length < 2) return []
+    const header = parseCSVLine(lines[0])
+    const taskIdx = header.findIndex(h => /^task$/i.test(h))
+    const projIdx = header.findIndex(h => /^project$/i.test(h))
+    const descIdx = header.findIndex(h => /^description$/i.test(h))
+    const pctIdx  = header.findIndex(h => /duration.*%/i.test(h))
+    if (descIdx === -1) throw new Error("Columna 'Description' no encontrada")
+    const entries = []
+    for (let i = 1; i < lines.length; i++) {
+      const cols = parseCSVLine(lines[i])
+      if (cols.length < 2) continue
+      const desc = (cols[descIdx] || '').trim()
+      const task = taskIdx !== -1 ? (cols[taskIdx] || '').trim()
+                 : projIdx !== -1 ? (cols[projIdx] || '').trim() : ''
+      const pct  = pctIdx !== -1 ? parseFloat(cols[pctIdx]) || 0 : 0
+      if (!desc) continue
+      const isNoise = desc.length <= 2 || /^[.\-_]+$/.test(desc)
+      entries.push({ id: crypto.randomUUID(), desc, task, pct, noise: isNoise, include: !isNoise })
+    }
+    return entries
+  }
+
+  function parseCSVLine(line) {
+    const result = []
+    let cur = '', inQuote = false
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i]
+      if (ch === '"') {
+        if (inQuote && line[i + 1] === '"') { cur += '"'; i++ }
+        else inQuote = !inQuote
+      } else if (ch === ',' && !inQuote) {
+        result.push(cur); cur = ''
+      } else {
+        cur += ch
+      }
+    }
+    result.push(cur)
+    return result
+  }
+
+  function confirmTogglImport(rows) {
+    const selected = rows.filter(r => r.include)
+    if (!selected.length) { toast('No hay entradas seleccionadas', true); return }
+    const taskMap = new Map()
+    selected.forEach(r => {
+      const task = (r.task || '').trim()
+      const desc = r.desc.trim()
+      if (!taskMap.has(task)) taskMap.set(task, [])
+      if (desc && !taskMap.get(task).includes(desc)) taskMap.get(task).push(desc)
+    })
+    const newRows = []
+    taskMap.forEach((descs, task) => {
+      newRows.push({ id: crypto.randomUUID(), task, descripcion: descs.join('\n'), fecha: '' })
+    })
+    const existing = (reportRef.current?.acciones_realizadas || []).filter(r => (r.task || '').trim())
+    scheduleReportSave({ acciones_realizadas: [...existing, ...newRows] })
+    setTogglModal(null)
+    toast(`${taskMap.size} tarea${taskMap.size !== 1 ? 's' : ''} importada${taskMap.size !== 1 ? 's' : ''} ✓`)
+  }
+
+  async function markReportSent() {
+    setReportSaving(true)
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('estimations')
+      .update({ report_sent: true, report_sent_at: now }).eq('id', estimation.id)
+    setReportSaving(false)
+    if (error) { toast('Error al marcar como enviado', true); return }
+    setEstimation(prev => ({ ...prev, report_sent: true, report_sent_at: now }))
+    toast('Reporte marcado como Enviado ✓')
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -553,12 +699,265 @@ export default function Estimation() {
         </div>
       )}
 
-      {/* ── TAB: REPORTE ─────────────────────────────────────────── */}
-      {activeTab === 'report' && (
-        <div className="empty-state">
-          <h3>Reporte Mensual</h3>
-          <p>Esta sección estará disponible próximamente.</p>
-          <button className="btn btn-outline" onClick={() => setActiveTab('estimation')}>← Volver a Estimación</button>
+      {/* ── TAB: REPORTE MENSUAL ─────────────────────────────────── */}
+      {activeTab === 'report' && (() => {
+        const rpt = reportData || {}
+        const reportReadonly = estimation.report_sent === true
+        const rd = key => rpt[key] || []
+
+        return (
+          <div className={reportReadonly ? 'readonly' : ''}>
+
+            {/* Banner enviado */}
+            {reportReadonly && (
+              <div className="readonly-banner" style={{ background: 'var(--green-soft)', color: 'var(--green-dark)', borderColor: '#86EFAC' }}>
+                <span>📋 Reporte marcado como <strong>Enviado</strong> el {fmtDate((estimation.report_sent_at || '').slice(0, 10))}. Solo lectura.</span>
+                <button className="btn btn-sm btn-outline" onClick={() => window.print()}>📄 Imprimir / PDF</button>
+              </div>
+            )}
+
+            {/* Datos del Proyecto */}
+            <div className="card mb-md">
+              <div className="section-header"><div className="section-title">Datos del Proyecto</div></div>
+              <div className="grid grid-3">
+                <div className="field"><label>Proyecto</label><input value={project.name} disabled /></div>
+                <div className="field"><label>Cliente</label><input value={project.client} disabled /></div>
+                <div className="field"><label>Ubicación</label><input value={project.location || '—'} disabled /></div>
+                <div className="field"><label>Líder de Proyecto</label><input value={project.team_leader || '—'} disabled /></div>
+                <div className="field"><label>Periodo</label><input value={estimation.period_from ? `${fmtDate(estimation.period_from)} — ${fmtDate(estimation.period_to)}` : '—'} disabled /></div>
+                <div className="field"><label>Estimación</label><input value={`#${String(estimation.number).padStart(3, '0')}`} disabled /></div>
+              </div>
+            </div>
+
+            {/* Acciones Realizadas */}
+            <div className="card mb-md">
+              <div className="section-header">
+                <div className="section-title">Acciones Realizadas en el Mes</div>
+                <div className="flex" style={{ gap: 8 }}>
+                  {!reportReadonly && <>
+                    <input ref={togglFileRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleTogglFile} />
+                    <button className="btn btn-outline btn-sm" onClick={() => togglFileRef.current?.click()}>↑ Importar Toggl CSV</button>
+                    <button className="btn btn-outline btn-sm" onClick={() => addReportRow('acciones_realizadas')}>+ Fila</button>
+                  </>}
+                </div>
+              </div>
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th className="row-num">N°</th>
+                    <th style={{ width: 180 }}>Tarea (Task)</th>
+                    <th>Descripción</th>
+                    <th style={{ width: 120 }}>Fecha (opcional)</th>
+                    {!reportReadonly && <th className="row-actions"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rd('acciones_realizadas').length === 0
+                    ? <tr><td colSpan={reportReadonly ? 4 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin acciones registradas</td></tr>
+                    : rd('acciones_realizadas').map((row, i) => {
+                        const lines = (row.descripcion || '').split('\n').filter(l => l.trim())
+                        return (
+                          <tr key={row.id}>
+                            <td className="row-num">{i + 1}</td>
+                            <td><input value={row.task || ''} readOnly={reportReadonly} onChange={e => updateReportRow('acciones_realizadas', row.id, 'task', e.target.value)} /></td>
+                            <td>
+                              {reportReadonly
+                                ? <ul style={{ margin: 0, padding: 0, listStyle: 'none', fontSize: 12 }}>
+                                    {lines.map((l, j) => <li key={j} style={{ display: 'flex', gap: 6, marginBottom: 3 }}><span style={{ color: 'var(--green)', fontWeight: 700 }}>{j + 1}.</span><span>{l}</span></li>)}
+                                  </ul>
+                                : <textarea value={row.descripcion || ''} rows={Math.max(2, lines.length)}
+                                    placeholder="Una descripción por línea"
+                                    style={{ width: '100%', padding: '4px 6px', border: '1px solid var(--border)', borderRadius: 4, fontFamily: 'inherit', fontSize: 12, resize: 'vertical', lineHeight: 1.5 }}
+                                    onChange={e => updateReportRow('acciones_realizadas', row.id, 'descripcion', e.target.value)} />}
+                            </td>
+                            <td><input type="date" value={row.fecha || ''} readOnly={reportReadonly} onChange={e => updateReportRow('acciones_realizadas', row.id, 'fecha', e.target.value)} /></td>
+                            {!reportReadonly && <td className="row-actions"><button className="btn btn-ghost btn-xs" onClick={() => removeReportRow('acciones_realizadas', row.id)}>✕</button></td>}
+                          </tr>
+                        )
+                      })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Acciones Pendientes */}
+            <div className="card mb-md">
+              <div className="section-header">
+                <div className="section-title">Acciones Pendientes</div>
+                {!reportReadonly && <button className="btn btn-outline btn-sm" onClick={() => addReportRow('acciones_pendientes')}>+ Fila</button>}
+              </div>
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th className="row-num">N°</th>
+                    <th>Acción</th>
+                    <th style={{ width: 120 }}>Fecha</th>
+                    <th style={{ width: 130 }}>Responsable</th>
+                    {!reportReadonly && <th className="row-actions"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rd('acciones_pendientes').length === 0
+                    ? <tr><td colSpan={reportReadonly ? 4 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin acciones pendientes</td></tr>
+                    : rd('acciones_pendientes').map((row, i) => {
+                        const isBEA = (row.responsable || 'BEA') === 'BEA'
+                        return (
+                          <tr key={row.id}>
+                            <td className="row-num">{i + 1}</td>
+                            <td><input value={row.accion || ''} readOnly={reportReadonly} onChange={e => updateReportRow('acciones_pendientes', row.id, 'accion', e.target.value)} /></td>
+                            <td><input type="date" value={row.fecha || ''} readOnly={reportReadonly} onChange={e => updateReportRow('acciones_pendientes', row.id, 'fecha', e.target.value)} /></td>
+                            <td style={{ textAlign: 'center' }}>
+                              {reportReadonly
+                                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: isBEA ? 'var(--green-soft)' : '#EFF6FF', color: isBEA ? 'var(--green-dark)' : '#1D4ED8' }}>{isBEA ? '🏢 BEA' : '👤 Cliente'}</span>
+                                : <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 99, overflow: 'hidden', fontSize: 11, fontWeight: 700 }}>
+                                    <button onClick={() => updateReportRow('acciones_pendientes', row.id, 'responsable', 'BEA')} style={{ padding: '4px 10px', border: 'none', cursor: 'pointer', background: isBEA ? 'var(--green)' : '#fff', color: isBEA ? '#fff' : 'var(--text-muted)' }}>🏢 BEA</button>
+                                    <button onClick={() => updateReportRow('acciones_pendientes', row.id, 'responsable', 'Cliente')} style={{ padding: '4px 10px', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', background: !isBEA ? '#2563EB' : '#fff', color: !isBEA ? '#fff' : 'var(--text-muted)' }}>👤 Cliente</button>
+                                  </div>}
+                            </td>
+                            {!reportReadonly && <td className="row-actions"><button className="btn btn-ghost btn-xs" onClick={() => removeReportRow('acciones_pendientes', row.id)}>✕</button></td>}
+                          </tr>
+                        )
+                      })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Información Pendiente */}
+            <div className="card mb-md">
+              <div className="section-header">
+                <div className="section-title">Información Pendiente</div>
+                {!reportReadonly && <button className="btn btn-outline btn-sm" onClick={() => addReportRow('informacion_pendiente')}>+ Fila</button>}
+              </div>
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th className="row-num">N°</th>
+                    <th>Información Pendiente</th>
+                    <th style={{ width: 130 }}>Responsable</th>
+                    {!reportReadonly && <th className="row-actions"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rd('informacion_pendiente').length === 0
+                    ? <tr><td colSpan={reportReadonly ? 3 : 4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin información pendiente</td></tr>
+                    : rd('informacion_pendiente').map((row, i) => {
+                        const isBEA = (row.responsable || 'BEA') === 'BEA'
+                        return (
+                          <tr key={row.id}>
+                            <td className="row-num">{i + 1}</td>
+                            <td><input value={row.texto || ''} readOnly={reportReadonly} onChange={e => updateReportRow('informacion_pendiente', row.id, 'texto', e.target.value)} /></td>
+                            <td style={{ textAlign: 'center' }}>
+                              {reportReadonly
+                                ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, background: isBEA ? 'var(--green-soft)' : '#EFF6FF', color: isBEA ? 'var(--green-dark)' : '#1D4ED8' }}>{isBEA ? '🏢 BEA' : '👤 Cliente'}</span>
+                                : <div style={{ display: 'inline-flex', border: '1px solid var(--border)', borderRadius: 99, overflow: 'hidden', fontSize: 11, fontWeight: 700 }}>
+                                    <button onClick={() => updateReportRow('informacion_pendiente', row.id, 'responsable', 'BEA')} style={{ padding: '4px 10px', border: 'none', cursor: 'pointer', background: isBEA ? 'var(--green)' : '#fff', color: isBEA ? '#fff' : 'var(--text-muted)' }}>🏢 BEA</button>
+                                    <button onClick={() => updateReportRow('informacion_pendiente', row.id, 'responsable', 'Cliente')} style={{ padding: '4px 10px', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', background: !isBEA ? '#2563EB' : '#fff', color: !isBEA ? '#fff' : 'var(--text-muted)' }}>👤 Cliente</button>
+                                  </div>}
+                            </td>
+                            {!reportReadonly && <td className="row-actions"><button className="btn btn-ghost btn-xs" onClick={() => removeReportRow('informacion_pendiente', row.id)}>✕</button></td>}
+                          </tr>
+                        )
+                      })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Riesgos */}
+            <div className="card mb-md">
+              <div className="section-header">
+                <div className="section-title">Riesgos</div>
+                {!reportReadonly && (
+                  <div className="flex" style={{ gap: 8 }}>
+                    <button className="btn btn-outline btn-sm"
+                      style={rpt.no_riesgos ? { background: 'var(--green-soft)', color: 'var(--green-dark)', borderColor: 'var(--green)' } : {}}
+                      onClick={() => scheduleReportSave({ no_riesgos: !rpt.no_riesgos })}>
+                      {rpt.no_riesgos ? '✓ Sin riesgos este mes' : 'No hay riesgos actuales'}
+                    </button>
+                    {!rpt.no_riesgos && <button className="btn btn-outline btn-sm" onClick={() => addReportRow('riesgos')}>+ Riesgo</button>}
+                  </div>
+                )}
+                {reportReadonly && rpt.no_riesgos && <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sin riesgos este mes</span>}
+              </div>
+              {rpt.no_riesgos
+                ? <div style={{ padding: 14, textAlign: 'center', color: 'var(--green-dark)', fontSize: 13, fontStyle: 'italic', background: 'var(--green-soft)', borderRadius: 'var(--radius)' }}>✓ No hay riesgos actuales en este mes</div>
+                : <table className="mini-table">
+                    <thead>
+                      <tr>
+                        <th className="row-num">N°</th>
+                        <th>Riesgo</th>
+                        <th style={{ width: 180 }}>Créditos en riesgo</th>
+                        {!reportReadonly && <th className="row-actions"></th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rd('riesgos').length === 0
+                        ? <tr><td colSpan={reportReadonly ? 3 : 4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin riesgos registrados</td></tr>
+                        : rd('riesgos').map((row, i) => (
+                            <tr key={row.id}>
+                              <td className="row-num">{i + 1}</td>
+                              <td><input value={row.riesgo || ''} readOnly={reportReadonly} onChange={e => updateReportRow('riesgos', row.id, 'riesgo', e.target.value)} /></td>
+                              <td><input value={row.creditos || ''} readOnly={reportReadonly} onChange={e => updateReportRow('riesgos', row.id, 'creditos', e.target.value)} /></td>
+                              {!reportReadonly && <td className="row-actions"><button className="btn btn-ghost btn-xs" onClick={() => removeReportRow('riesgos', row.id)}>✕</button></td>}
+                            </tr>
+                          ))}
+                    </tbody>
+                  </table>}
+            </div>
+
+            {/* Entregables */}
+            <div className="card mb-md">
+              <div className="section-header">
+                <div className="section-title">Entregables Significativos BEA</div>
+                {!reportReadonly && <button className="btn btn-outline btn-sm" onClick={() => addReportRow('entregables')}>+ Item</button>}
+              </div>
+              <table className="mini-table">
+                <tbody>
+                  {rd('entregables').length === 0
+                    ? <tr><td colSpan={reportReadonly ? 2 : 3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin entregables registrados</td></tr>
+                    : rd('entregables').map((row, i) => (
+                        <tr key={row.id}>
+                          <td className="row-num">{i + 1}</td>
+                          <td><input value={row.texto || ''} readOnly={reportReadonly} onChange={e => updateReportRow('entregables', row.id, 'texto', e.target.value)} /></td>
+                          {!reportReadonly && <td className="row-actions"><button className="btn btn-ghost btn-xs" onClick={() => removeReportRow('entregables', row.id)}>✕</button></td>}
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Barra de acciones */}
+            {!reportReadonly && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 24, paddingTop: 16, borderTop: '2px solid var(--green)' }} className="no-print">
+                <span className={`status-pill${reportSaving ? ' dirty' : ''}`}>{reportSaving ? 'Guardando...' : 'Guardado'}</span>
+                <div className="flex" style={{ gap: 8 }}>
+                  <button className="btn btn-outline" onClick={() => toast('Borrador guardado ✓')}>Guardar borrador</button>
+                  <button className="btn btn-dark" onClick={() => window.print()}>📄 Generar PDF</button>
+                  <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={() => setModal({
+                    title: '✉ Marcar Reporte como Enviado',
+                    body: '<p>Una vez marcado como <strong>Enviado</strong>, el reporte no podrá editarse.</p><p style="margin-top:8px;color:var(--text-muted)">¿Confirmas que deseas marcarlo como Enviado?</p>',
+                    onConfirm: markReportSent,
+                  })}>✉ Marcar como Enviado</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* Modal Toggl CSV preview */}
+      {togglModal && (
+        <div className="modal-overlay show" onClick={e => e.target === e.currentTarget && setTogglModal(null)}>
+          <div className="modal" style={{ maxWidth: 660 }}>
+            <div className="modal-title">↑ Importar desde Toggl Track</div>
+            <div className="modal-body">
+              <TogglPreview rows={togglModal.rows} onChange={rows => setTogglModal({ rows })} />
+            </div>
+            <div className="modal-actions">
+              <button className="btn btn-outline" onClick={() => setTogglModal(null)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={() => confirmTogglImport(togglModal.rows)}>
+                Importar seleccionadas ({togglModal.rows.filter(r => r.include).length})
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -585,6 +984,53 @@ function KpiBox({ label, pct }) {
       <div className="kpi-label">{label}</div>
       <div className="kpi-value">{fmtPct(pct)}</div>
       <div className="progress"><div className="progress-bar" style={{ width: `${Math.min(100, pct)}%` }} /></div>
+    </div>
+  )
+}
+
+function TogglPreview({ rows, onChange }) {
+  const clean = rows.filter(r => r.include).length
+  const noisy = rows.filter(r => r.noise).length
+  function toggle(id) {
+    onChange(rows.map(r => r.id === id ? { ...r, include: !r.include } : r))
+  }
+  return (
+    <div>
+      <div style={{ fontSize: 13, marginBottom: 10 }}>
+        <strong>{rows.length}</strong> entradas encontradas ·{' '}
+        <span style={{ color: 'var(--green-dark)' }}>{clean} seleccionadas</span> ·{' '}
+        <span style={{ color: 'var(--warning)' }}>{noisy} con ruido</span>
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+        Desmarca las entradas que <strong>no</strong> quieras incluir. Las amarillas parecen registros de prueba.
+      </div>
+      <div style={{ maxHeight: 340, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead style={{ position: 'sticky', top: 0, background: 'var(--surface)' }}>
+            <tr>
+              <th style={{ padding: '6px 8px', fontSize: 10, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--text-muted)', width: 40, textAlign: 'center' }}>✓</th>
+              <th style={{ padding: '6px 8px', fontSize: 10, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--text-muted)' }}>Tarea</th>
+              <th style={{ padding: '6px 8px', fontSize: 10, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--text-muted)' }}>Descripción</th>
+              <th style={{ padding: '6px 8px', fontSize: 10, textTransform: 'uppercase', letterSpacing: .5, color: 'var(--text-muted)', textAlign: 'right' }}>%</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} style={{ background: r.noise ? '#FEF3C7' : undefined }}>
+                <td style={{ textAlign: 'center', padding: '5px 8px' }}>
+                  <input type="checkbox" checked={r.include} onChange={() => toggle(r.id)} style={{ accentColor: 'var(--green)' }} />
+                </td>
+                <td style={{ padding: '5px 8px', fontSize: 11, color: 'var(--text-muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={r.task}>{r.task || '—'}</td>
+                <td style={{ padding: '5px 8px', fontSize: 12 }}>
+                  {r.desc}
+                  {r.noise && <span style={{ fontSize: 10, background: '#B7791F', color: '#fff', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>Ruido</span>}
+                </td>
+                <td style={{ padding: '5px 8px', fontSize: 12, textAlign: 'right', color: 'var(--text-muted)' }}>{r.pct.toFixed(1)}%</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
