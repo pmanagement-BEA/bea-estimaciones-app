@@ -14,7 +14,7 @@ function emptyAlcance() {
 export default function AditivaForm() {
   const { id, adId } = useParams()
   const navigate = useNavigate()
-  const isNew = adId === 'new'
+  const isNew = !adId || adId === 'new'
 
   const [project, setProject]     = useState(null)
   const [aditiva, setAditiva]     = useState(null)
