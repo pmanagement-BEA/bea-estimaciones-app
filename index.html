@@ -4,7 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>bea-estimaciones-app</title>
+    <title>BEA Estimaciones</title>
+    <script>
+      (function(){
+        var redirect = sessionStorage.getItem('spa-redirect');
+        if (redirect) {
+          sessionStorage.removeItem('spa-redirect');
+          window.history.replaceState(null, '', '/bea-estimaciones-app' + redirect);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
