@@ -5,6 +5,7 @@ import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, projectTotals, conceptAmount, getAcumuladoAnteriorMap } from '../utils/calculations'
+import { nextNumber } from '../utils/aditivas'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -92,7 +93,7 @@ export default function Estimation() {
         const pad = n => String(n).padStart(2, '0')
         const lastDay = new Date(y, m + 1, 0).getDate()
         const { data, error } = await supabase.from('estimations')
-          .insert({ project_id: id, number: allEsts.length + 1, status: 'Borrador', period_from: `${y}-${pad(m+1)}-01`, period_to: `${y}-${pad(m+1)}-${pad(lastDay)}` })
+          .insert({ project_id: id, number: nextNumber(allEsts), status: 'Borrador', period_from: `${y}-${pad(m+1)}-01`, period_to: `${y}-${pad(m+1)}-${pad(lastDay)}` })
           .select().single()
         if (error) { toast('Error al crear estimación', true); setLoading(false); return }
         est = { ...data, estimation_items: [] }

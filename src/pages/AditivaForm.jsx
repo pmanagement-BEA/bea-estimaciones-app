@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtDate } from '../utils/format'
+import { incorporarAditivaAlContrato, nextNumber } from '../utils/aditivas'
 
 const ALL_STATUSES = ['Borrador', 'Enviada', 'Aceptada', 'Negada', 'Negociacion']
 
@@ -34,11 +35,11 @@ export default function AditivaForm() {
     setProject(p)
 
     if (isNew) {
-      // Contar aditivas existentes para el número
-      const { count } = await supabase.from('aditivas').select('*', { count: 'exact', head: true }).eq('project_id', id)
+      // Siguiente número libre (máximo + 1, no conteo: si se borra una no se repite)
+      const { data: prevNums } = await supabase.from('aditivas').select('number').eq('project_id', id)
       const today = new Date().toISOString().slice(0, 10)
       setAditiva({
-        number: (count || 0) + 1, fecha: today,
+        number: nextNumber(prevNums), fecha: today,
         ciudad: 'San Pedro Garza García, N.L.',
         cliente_nombre: p.client || '', cliente_atn: p.client_contact_name || '', cliente_email: p.client_contact_email || '',
         proyecto: p.name || '', asunto: 'Aditiva por cambios en diseño',
@@ -114,6 +115,12 @@ export default function AditivaForm() {
     if (alcanceRows.length > 0) {
       const { data: newAlc } = await supabase.from('aditiva_alcances').insert(alcanceRows).select()
       if (newAlc) setAlcances([...newAlc].sort((a, b) => a.sort_order - b.sort_order))
+    }
+
+    if (status === 'Aceptada') {
+      const res = await incorporarAditivaAlContrato(id, { ...aditiva, status }, alcanceRows)
+      if (res.error) toast('Aceptada, pero no se pudo sumar al contrato', true)
+      else if (res.added) toast('Aditiva sumada al contrato ✓')
     }
 
     setSaving(false)

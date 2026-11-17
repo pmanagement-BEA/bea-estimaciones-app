@@ -27,7 +27,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'nombre', ''),
-    coalesce(new.raw_user_meta_data->>'role', 'lider')
+    'lider'  -- nunca tomar el rol de lo que mande el usuario al registrarse
   );
   return new;
 end;
@@ -140,6 +140,8 @@ create table if not exists estimations (
   period_from date not null,
   period_to   date not null,
   anticipo    numeric(14,2) not null default 0,
+  report_sent    boolean not null default false,
+  report_sent_at timestamptz,
   created_at  timestamptz not null default now()
 );
 alter table estimations enable row level security;

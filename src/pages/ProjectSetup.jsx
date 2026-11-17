@@ -5,6 +5,7 @@ import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
 import { disciplineSubtotal, projectTotals, conceptAmount } from '../utils/calculations'
+import { nextNumber } from '../utils/aditivas'
 
 // ── Parseo de CSV ─────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -399,7 +400,7 @@ export default function ProjectSetup() {
       const lastDay = new Date(y, m + 1, 0).getDate()
       const period_from = `${y}-${pad(m + 1)}-01`
       const period_to   = `${y}-${pad(m + 1)}-${pad(lastDay)}`
-      const number = estimations.length + 1
+      const number = nextNumber(estimations)
 
       const { data, error } = await supabase.from('estimations')
         .insert({ project_id: id, number, status: 'Borrador', period_from, period_to })
