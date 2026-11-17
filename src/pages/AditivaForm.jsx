@@ -5,6 +5,8 @@ import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtDate } from '../utils/format'
 import { incorporarAditivaAlContrato, nextNumber } from '../utils/aditivas'
+import { useAuth } from '../hooks/useAuth'
+import { isReadOnlyRole } from '../lib/directorio'
 
 const ALL_STATUSES = ['Borrador', 'Enviada', 'Aceptada', 'Negada', 'Negociacion']
 
@@ -14,6 +16,7 @@ function emptyAlcance() {
 
 export default function AditivaForm() {
   const { id, adId } = useParams()
+  const { profile } = useAuth()
   const navigate = useNavigate()
   const isNew = !adId || adId === 'new'
 
@@ -134,7 +137,7 @@ export default function AditivaForm() {
 
   const total = alcances.reduce((s, al) => s + (parseFloat(al.monto) || 0), 0)
   const numLabel = `#${String(aditiva.number).padStart(3, '0')}`
-  const isEditable = !['Aceptada', 'Negada'].includes(aditiva.status)
+  const isEditable = !['Aceptada', 'Negada'].includes(aditiva.status) && !isReadOnlyRole(profile)
 
   return (
     <div className="main">

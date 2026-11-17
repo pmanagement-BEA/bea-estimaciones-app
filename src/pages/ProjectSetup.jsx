@@ -6,7 +6,8 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
 import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS } from '../utils/calculations'
 import { nextNumber } from '../utils/aditivas'
-import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA } from '../lib/directorio'
+import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
+import { useAuth } from '../hooks/useAuth'
 
 // ── Parseo de CSV ─────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -162,6 +163,8 @@ function disciplineAdvancePct(discipline, estimations) {
 export default function ProjectSetup() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const soloLectura = isReadOnlyRole(profile)
 
   const [project, setProject] = useState(null)
   const [disciplines, setDisciplines] = useState([])
@@ -504,6 +507,10 @@ export default function ProjectSetup() {
         </div>
       </div>
 
+      {soloLectura && (
+        <div className="readonly-banner" style={{ marginBottom: 16 }}>👁 Tienes acceso de solo lectura a este proyecto.</div>
+      )}
+      <fieldset disabled={soloLectura} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       {/* ── Datos Generales ────────────────────────────────────── */}
       <div className="card mb-md">
         <div className="section-header"><div className="section-title">Datos Generales</div></div>
@@ -843,6 +850,8 @@ export default function ProjectSetup() {
           })}
         </div>
       )}
+
+      </fieldset>
 
       {/* ── Botón final ────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '2px solid var(--green)' }}>

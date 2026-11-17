@@ -6,6 +6,8 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS } from '../utils/calculations'
 import { nextNumber } from '../utils/aditivas'
+import { useAuth } from '../hooks/useAuth'
+import { isReadOnlyRole } from '../lib/directorio'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -40,6 +42,8 @@ function monthOptions(periodFrom, startDate, endDate) {
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Estimation() {
   const { id, estId } = useParams()
+  const { profile } = useAuth()
+  const soloLectura = isReadOnlyRole(profile)
   const navigate = useNavigate()
 
   const [project, setProject]         = useState(null)
@@ -321,7 +325,7 @@ export default function Estimation() {
   if (loading) return <div className="main"><div className="spinner" /></div>
   if (!project || !estimation) return <div className="main"><div className="empty-state"><h3>No encontrado</h3></div></div>
 
-  const readonly = estimation.status === 'Enviada'
+  const readonly = estimation.status === 'Enviada' || soloLectura
   const rates = projectRates(project)
   const summary = estimationSummary(disciplines, allEstimations, estimation.id, items, rates)
   const { totals, acumMap, acumAnterior, acumGlobal, porEstimar, advanceThis, advanceGlobal } = summary
@@ -356,7 +360,9 @@ export default function Estimation() {
       {/* Banner readonly */}
       {readonly && (
         <div className="readonly-banner">
-          <span>📋 Esta estimación está marcada como <strong>{estimation.status}</strong> y no puede editarse.</span>
+          <span>{soloLectura && estimation.status !== 'Enviada'
+            ? <>👁 Tienes acceso de <strong>solo lectura</strong> a esta estimación.</>
+            : <>📋 Esta estimación está marcada como <strong>{estimation.status}</strong> y no puede editarse.</>}</span>
           <button className="btn btn-sm btn-outline" onClick={() => navigate(`/projects/${id}/history`)}>Ver historial</button>
         </div>
       )}
@@ -690,7 +696,7 @@ export default function Estimation() {
       {/* ── TAB: REPORTE MENSUAL ─────────────────────────────────── */}
       {activeTab === 'report' && (() => {
         const rpt = reportData || {}
-        const reportReadonly = estimation.report_sent === true
+        const reportReadonly = estimation.report_sent === true || soloLectura
         const rd = key => rpt[key] || []
 
         return (

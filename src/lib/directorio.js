@@ -5,7 +5,12 @@ export const ROLES_APP = [
   ['colaborador', 'Colaborador (ve sus proyectos asignados)'],
   ['lider', 'Líder de proyecto (crea proyectos, envía estimaciones)'],
   ['coordinador', 'Coordinador (ve todo, administra el directorio)'],
+  ['lectura', 'Solo lectura (ve todos los proyectos, no edita — p. ej. Facturación)'],
 ]
+
+export function isReadOnlyRole(profile) {
+  return profile?.role === 'lectura'
+}
 
 // Rol dentro del proyecto → área sugerida para filtrar la lista
 export const TEAM_ROLE_AREA = {
@@ -79,6 +84,7 @@ export function parseDirectorioPaste(text) {
   const rolMap = r => {
     const s = (r || '').toLowerCase()
     if (/coord/.test(s)) return 'coordinador'
+    if (/lectura|consulta|factur/.test(s)) return 'lectura'
     if (/lider|líder/.test(s)) return 'lider'
     return 'colaborador'
   }

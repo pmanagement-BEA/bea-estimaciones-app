@@ -16,7 +16,7 @@ export default function Projects() {
   const [mine, setMine] = useState({}) // { project_id: [rol] }
   const [onlyMine, setOnlyMine] = useState(true)
   const isCoord = profile?.role === 'coordinador'
-  const canCreate = !profile || profile.role !== 'colaborador'
+  const canCreate = !profile || ['lider', 'coordinador'].includes(profile.role)
 
   useEffect(() => { fetchProjects() }, [])
   useEffect(() => {

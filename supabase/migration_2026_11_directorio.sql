@@ -13,7 +13,7 @@ create table if not exists directorio (
   nombre     text not null default '',
   area       text check (area is null or area in ('Consultoría','Commissioning','Modelación','Dirección / PMO')),
   puesto     text not null default '',
-  rol_app    text not null default 'colaborador' check (rol_app in ('colaborador','lider','coordinador')),
+  rol_app    text not null default 'colaborador' check (rol_app in ('colaborador','lider','coordinador','lectura')),
   activo     boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -31,7 +31,13 @@ create policy "directorio: coordinador lo edita"
 alter table profiles add column if not exists area text;
 alter table profiles drop constraint if exists profiles_role_check;
 alter table profiles add constraint profiles_role_check
-  check (role in ('colaborador','lider','coordinador'));
+  check (role in ('colaborador','lider','coordinador','lectura'));
+
+-- Solo lectura (p. ej. Facturación): ve todos los proyectos, no edita nada
+create or replace function public.is_lectura()
+returns boolean language sql security definer stable set search_path = public as $$
+  select exists (select 1 from profiles where id = auth.uid() and role = 'lectura');
+$$;
 
 -- Todos los usuarios con sesión pueden ver nombres del equipo (no solo el suyo)
 drop policy if exists "profiles: autenticados ven el equipo" on profiles;
@@ -194,3 +200,26 @@ create policy "projects: lider crea sus proyectos"
     user_id = auth.uid()
     and exists (select 1 from profiles where id = auth.uid() and role in ('lider','coordinador'))
   );
+
+-- ── 5. Solo lectura: ve todo, sin escribir ──────────────────
+-- Las políticas de Postgres se suman (OR), así que estas solo agregan lectura.
+drop policy if exists "lectura: ve proyectos" on projects;
+create policy "lectura: ve proyectos" on projects for select using (public.is_lectura());
+drop policy if exists "lectura: ve disciplinas" on disciplines;
+create policy "lectura: ve disciplinas" on disciplines for select using (public.is_lectura());
+drop policy if exists "lectura: ve conceptos" on concepts;
+create policy "lectura: ve conceptos" on concepts for select using (public.is_lectura());
+drop policy if exists "lectura: ve estimaciones" on estimations;
+create policy "lectura: ve estimaciones" on estimations for select using (public.is_lectura());
+drop policy if exists "lectura: ve items" on estimation_items;
+create policy "lectura: ve items" on estimation_items for select using (public.is_lectura());
+drop policy if exists "lectura: ve reportes" on report_data;
+create policy "lectura: ve reportes" on report_data for select using (public.is_lectura());
+drop policy if exists "lectura: ve anexos" on report_anexos;
+create policy "lectura: ve anexos" on report_anexos for select using (public.is_lectura());
+drop policy if exists "lectura: ve aditivas" on aditivas;
+create policy "lectura: ve aditivas" on aditivas for select using (public.is_lectura());
+drop policy if exists "lectura: ve alcances" on aditiva_alcances;
+create policy "lectura: ve alcances" on aditiva_alcances for select using (public.is_lectura());
+drop policy if exists "lectura: ve equipos" on project_members;
+create policy "lectura: ve equipos" on project_members for select using (public.is_lectura());
