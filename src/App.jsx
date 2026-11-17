@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { pideContrasena } from './lib/supabase'
+import CrearContrasena from './pages/CrearContrasena'
 import { useAuth } from './hooks/useAuth'
 import TopBar from './components/TopBar'
 import Toast from './components/Toast'
@@ -22,7 +25,12 @@ function PrivateRoute({ children }) {
 export default function App() {
   const { session, profile, loading, signOut } = useAuth()
 
+  const [tipoContrasena, setTipoContrasena] = useState(pideContrasena())
+
   if (loading) return <div className="spinner" style={{ marginTop: 80 }} />
+  if (session && tipoContrasena) {
+    return <CrearContrasena tipo={tipoContrasena} email={session.user?.email} onListo={() => setTipoContrasena(null)} />
+  }
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>

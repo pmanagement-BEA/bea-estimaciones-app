@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -7,6 +8,16 @@ export default function Login() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [aviso, setAviso] = useState('')
+
+  async function olvide() {
+    setError(''); setAviso('')
+    if (!email) return setError('Escribe tu correo y vuelve a dar clic en "¿Olvidaste tu contraseña?".')
+    const redirectTo = window.location.origin + import.meta.env.BASE_URL
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    if (error) return setError(error.message)
+    setAviso(`Te enviamos un correo a ${email} para crear una contraseña nueva.`)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -63,8 +74,16 @@ export default function Login() {
                 {error}
               </div>
             )}
+            {aviso && (
+              <div style={{ fontSize: 13, color: 'var(--green-dark)', background: 'var(--green-soft)', padding: '8px 12px', borderRadius: 'var(--radius)' }}>
+                {aviso}
+              </div>
+            )}
             <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 4 }}>
               {loading ? 'Entrando...' : 'Entrar'}
+            </button>
+            <button type="button" onClick={olvide} style={{ background: 'none', border: 'none', color: 'var(--text-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+              ¿Olvidaste tu contraseña?
             </button>
           </form>
         </div>
