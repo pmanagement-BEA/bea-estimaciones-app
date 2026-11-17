@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { disciplineSubtotal, projectTotals, conceptAmount, getAcumuladoAnteriorMap } from '../utils/calculations'
+import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS } from '../utils/calculations'
 import { nextNumber } from '../utils/aditivas'
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -36,12 +36,6 @@ function monthOptions(periodFrom, startDate, endDate) {
 }
 
 
-function thisEstAmount(item, concept, discipline) {
-  if (!item?.included) return 0
-  const monto = conceptAmount(concept, discipline)
-  if (item.parcial_enabled) return ((parseFloat(item.pct_parcial) || 0) / 100) * monto
-  return monto
-}
 
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Estimation() {
@@ -141,18 +135,15 @@ export default function Estimation() {
 
   // ── Guardar item en Supabase (debounce 500ms) ──────────────────────────────
   const scheduleItemSave = useCallback((conceptId, updatedItem, disc, concept) => {
-    // Calcular amount
-    const monto = conceptAmount(concept, disc)
-    const amount = updatedItem.included
-      ? (updatedItem.parcial_enabled ? ((parseFloat(updatedItem.pct_parcial) || 0) / 100) * monto : monto)
-      : 0
+    // Calcular amount con las reglas del proyecto (anticipo / finiquito)
+    const amount = itemAmount(updatedItem, concept, disc, projectRates(project), disciplines)
 
     const itemWithAmount = { ...updatedItem, amount }
     setItems(prev => ({ ...prev, [conceptId]: itemWithAmount }))
 
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => upsertItem(estimation.id, conceptId, itemWithAmount), 500)
-  }, [estimation?.id])
+  }, [estimation?.id, project, disciplines])
 
   async function upsertItem(estId, conceptId, item) {
     setSaving(true)
@@ -175,14 +166,7 @@ export default function Estimation() {
     setSaving(false)
   }
 
-  // ── Anticipo ───────────────────────────────────────────────────────────────
-  async function saveAnticipo(value) {
-    const anticipo = parseFloat(value) || 0
-    setEstimation(prev => ({ ...prev, anticipo }))
-    clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() =>
-      supabase.from('estimations').update({ anticipo }).eq('id', estimation.id), 600)
-  }
+  // El anticipo ahora es un % del proyecto (Configuración), no un dato por estimación.
 
   // ── Marcar como Enviada ────────────────────────────────────────────────────
   async function markSent() {
@@ -338,30 +322,21 @@ export default function Estimation() {
   if (!project || !estimation) return <div className="main"><div className="empty-state"><h3>No encontrado</h3></div></div>
 
   const readonly = estimation.status === 'Enviada'
-  const totals = projectTotals(disciplines)
-  const acumMap = getAcumuladoAnteriorMap(disciplines, allEstimations, estimation.id)
+  const rates = projectRates(project)
+  const summary = estimationSummary(disciplines, allEstimations, estimation.id, items, rates)
+  const { totals, acumMap, acumAnterior, acumGlobal, porEstimar, advanceThis, advanceGlobal } = summary
+  const currentTotal = summary.actual
+  const thisEstAmount = (item, c, d) => itemAmount(item, c, d, rates, disciplines)
+  const amountOf = (c, d) => conceptAmount(c, d, rates, disciplines)
+  const hasFiniquitoConcepts = d => (d.concepts || []).some(c => c.type === 'Finiquito')
 
-  // Totales financieros
-  let acumAnterior = 0, currentTotal = 0
-  disciplines.forEach(d => (d.concepts || []).forEach(c => {
-    acumAnterior += acumMap[c.id] || 0
-    currentTotal += thisEstAmount(items[c.id], c, d)
-  }))
-  const acumGlobal  = acumAnterior + currentTotal
-  const porEstimar  = Math.max(0, totals.estimable - acumGlobal)
-  const advanceThis = totals.estimable > 0 ? (currentTotal / totals.estimable) * 100 : 0
-  const advanceGlobal = totals.estimable > 0 ? (acumGlobal / totals.estimable) * 100 : 0
-
-  // Avance por disciplina
+  // Avance por disciplina (sobre su importe con descuento, como el Excel)
   const discAdv = {}
   disciplines.forEach(d => {
-    const s = disciplineSubtotal(d)
-    let dAcum = 0
-    ;(d.concepts || []).forEach(c => {
-      dAcum += acumMap[c.id] || 0
-      dAcum += thisEstAmount(items[c.id], c, d)
-    })
-    discAdv[d.id] = s.estimable > 0 ? (dAcum / s.estimable) * 100 : 0
+    const bd = summary.byDiscipline[d.id]
+    discAdv[d.id] = bd?.conDesc === 0 && hasFiniquitoConcepts(d)
+      ? (totals.finiquito > 0 ? (bd.acumulado / totals.finiquito) * 100 : 0)
+      : (bd?.avance || 0)
   })
 
   const estNumLabel = `#${String(estimation.number).padStart(3, '0')}`
@@ -454,20 +429,17 @@ export default function Estimation() {
               <span className="muted" style={{ fontSize: 11 }}>Moneda: {project.currency}</span>
             </div>
             <div className="summary-grid">
-              <StatBox label="Importe Total" value={fmtMoney(totals.importeTotal, project.currency)} />
-              <div className="stat-box">
-                <div className="stat-label">Anticipo</div>
-                <input type="number" step="0.01" value={estimation.anticipo || 0}
-                  disabled={readonly}
-                  onChange={e => saveAnticipo(e.target.value)}
-                  style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)', width: '100%', padding: 0, border: 'none', background: 'transparent' }} />
-              </div>
-              <StatBox label="Finiquito (10%)" value={fmtMoney(totals.finiquito, project.currency)} muted />
-              <StatBox label="Importe Estimable (90%)" value={fmtMoney(totals.estimable, project.currency)} green />
+              <StatBox label="Importe Total" value={fmtMoney(totals.conDescuento, project.currency)} />
+              <StatBox label={`Anticipo (${fmtPct(rates.anticipoPct)})`} value={fmtMoney(totals.anticipo, project.currency)} muted />
+              <StatBox label={`Finiquito (${fmtPct(rates.finiquitoPct)})`} value={fmtMoney(totals.finiquito, project.currency)} muted />
+              <StatBox label={`Importe Estimable (${fmtPct(100 - rates.anticipoPct - rates.finiquitoPct)})`} value={fmtMoney(totals.estimable, project.currency)} green />
               <StatBox label="Acumulado Anterior" value={fmtMoney(acumAnterior, project.currency)} muted />
               <StatBox label="Esta Estimación" value={fmtMoney(currentTotal, project.currency)} green />
               <StatBox label="Acumulado Global" value={fmtMoney(acumGlobal, project.currency)} />
               <StatBox label="Por Estimar" value={fmtMoney(porEstimar, project.currency)} muted />
+              {totals.finiquito > 0 && (
+                <StatBox label="Finiquito por Cobrar" value={fmtMoney(summary.finiquitoPorCobrar, project.currency)} muted />
+              )}
             </div>
           </div>
 
@@ -478,10 +450,23 @@ export default function Estimation() {
               <KpiBox label="Esta Estimación" pct={advanceThis} />
               <KpiBox label="Avance Global del Proyecto" pct={advanceGlobal} />
             </div>
+            <div className="kpi-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 10 }}>
+              {AREAS.map(a => {
+                const av = summary.areaAvance[a]
+                return (
+                  <div key={a} className={`kpi-box${av ? '' : ' inactive'}`}>
+                    <div className="kpi-label">% Avance {a}</div>
+                    <div className="kpi-value">{av ? fmtPct(av.pct) : '—'}</div>
+                    <div className="progress"><div className="progress-bar" style={{ width: `${av ? Math.min(100, av.pct) : 0}%` }} /></div>
+                    {!av && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 3 }}>No aplica</div>}
+                  </div>
+                )
+              })}
+            </div>
             <div className="kpi-row">
               {disciplines.map(d => {
-                const s = disciplineSubtotal(d)
-                const active = s.conDesc > 0
+                const s = disciplineSubtotal(d, rates)
+                const active = s.conDesc > 0 || (hasFiniquitoConcepts(d) && totals.finiquito > 0)
                 let lbl = d.name
                   .replace('& Monitoring-Based Commissioning', '')
                   .replace('Certificación (FINIQUITO)', 'Certificación').trim()
@@ -503,8 +488,8 @@ export default function Estimation() {
           <div className="section">
             <div className="section-header"><div className="section-title">Conceptos por Disciplina</div></div>
             {disciplines.map(d => {
-              const s = disciplineSubtotal(d)
-              if (s.conDesc === 0) {
+              const s = disciplineSubtotal(d, rates)
+              if (s.conDesc === 0 && !(hasFiniquitoConcepts(d) && totals.finiquito > 0)) {
                 return (
                   <div key={d.id} className="discipline-block" style={{ opacity: .45, pointerEvents: 'none', filter: 'grayscale(.5)' }}>
                     <div className="discipline-header" style={{ background: 'var(--surface-2)' }}>
@@ -523,7 +508,9 @@ export default function Estimation() {
                   <div className="discipline-header">
                     <div className="discipline-name">{d.name}</div>
                     <div className="discipline-stats">
-                      <span>Estimable: <strong>{fmtMoney(s.estimable, project.currency)}</strong></span>
+                      <span>{s.conDesc === 0 && hasFiniquitoConcepts(d)
+                        ? <>Finiquito: <strong>{fmtMoney(totals.finiquito, project.currency)}</strong></>
+                        : <>Estimable: <strong>{fmtMoney(s.estimable, project.currency)}</strong></>}</span>
                       <span>Avance: <strong>{fmtPct(discAdv[d.id])}</strong></span>
                     </div>
                   </div>
@@ -548,7 +535,7 @@ export default function Estimation() {
                         {(d.concepts || []).length === 0 ? (
                           <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin conceptos configurados</td></tr>
                         ) : (d.concepts || []).map(c => {
-                          const monto = conceptAmount(c, d)
+                          const monto = amountOf(c, d)
                           const anterior = acumMap[c.id] || 0
                           const item = items[c.id] || { included: false, amount: 0, parcial_enabled: false, pct_parcial: 0, delayed: false, cause: '' }
                           const cobradoCompleto = monto > 0 && anterior >= monto - 0.01

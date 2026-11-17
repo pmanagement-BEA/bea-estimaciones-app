@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { projectTotals, getAcumuladoAnteriorMap, conceptAmount } from '../utils/calculations'
+import { getAcumuladoAnteriorMap, conceptAmount, estimationSummary, projectRates } from '../utils/calculations'
 
 export default function History() {
   const { id } = useParams()
@@ -53,27 +53,15 @@ export default function History() {
   if (loading) return <div className="main"><div className="spinner" /></div>
   if (!project) return <div className="main"><div className="empty-state"><h3>No encontrado</h3></div></div>
 
-  const totals = projectTotals(disciplines)
+  const rates = projectRates(project)
   const enviadas = estimations.filter(e => e.status === 'Enviada')
   const borradores = estimations.filter(e => e.status === 'Borrador')
 
-  // Acumulado global (solo estimaciones Enviadas)
-  let acumGlobal = 0
-  enviadas.forEach(est => {
-    ;(est.estimation_items || []).forEach(item => {
-      if (!item.included) return
-      for (const d of disciplines) {
-        const c = (d.concepts || []).find(c => c.id === item.concept_id)
-        if (c) {
-          acumGlobal += item.parcial_enabled
-            ? ((parseFloat(item.pct_parcial) || 0) / 100) * conceptAmount(c, d)
-            : conceptAmount(c, d)
-          break
-        }
-      }
-    })
-  })
-  const avanceGlobal = totals.estimable > 0 ? (acumGlobal / totals.estimable) * 100 : 0
+  // Acumulado global (solo estimaciones Enviadas), mismas reglas que el Excel
+  const sentSummary = estimationSummary(disciplines, estimations, null, null, rates)
+  const totals = sentSummary.totals
+  const acumGlobal = sentSummary.acumGlobal
+  const avanceGlobal = sentSummary.advanceGlobal
 
   return (
     <div className="main">
@@ -183,7 +171,7 @@ export default function History() {
           {disciplines.length === 0 ? (
             <div className="empty-state"><h3>Sin disciplinas configuradas</h3></div>
           ) : disciplines.map(d => {
-            const enviadasAcum = getAcumuladoAnteriorMap(disciplines, estimations, null)
+            const enviadasAcum = getAcumuladoAnteriorMap(disciplines, estimations, null, rates)
             return (
               <div key={d.id} className="discipline-block" style={{ marginBottom: 14 }}>
                 <div className="discipline-header">
@@ -205,7 +193,7 @@ export default function History() {
                       {(d.concepts || []).length === 0 ? (
                         <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin conceptos</td></tr>
                       ) : (d.concepts || []).map(c => {
-                        const monto = conceptAmount(c, d)
+                        const monto = conceptAmount(c, d, rates, disciplines)
                         const acum = enviadasAcum[c.id] || 0
                         const porEst = Math.max(0, monto - acum)
                         const pct = monto > 0 ? (acum / monto) * 100 : 0
@@ -241,27 +229,10 @@ export default function History() {
 
 // ── Sub-componente: fila de estimación ────────────────────────────────────────
 function EstimationRow({ est, disciplines, estimations, project, navigate, id, setModal, onRevert, onDelete }) {
-  const acumMap = getAcumuladoAnteriorMap(disciplines, estimations, est.id)
-
-  let thisTotal = 0
-  ;(est.estimation_items || []).forEach(item => {
-    if (!item.included) return
-    for (const d of disciplines) {
-      const c = (d.concepts || []).find(c => c.id === item.concept_id)
-      if (c) {
-        thisTotal += item.parcial_enabled
-          ? ((parseFloat(item.pct_parcial) || 0) / 100) * conceptAmount(c, d)
-          : conceptAmount(c, d)
-        break
-      }
-    }
-  })
-
-  let acumAnterior = 0
-  Object.values(acumMap).forEach(v => { acumAnterior += v })
-
-  const totals = projectTotals(disciplines)
-  const advancePct = totals.estimable > 0 ? ((acumAnterior + thisTotal) / totals.estimable) * 100 : 0
+  const items = Object.fromEntries((est.estimation_items || []).map(i => [i.concept_id, i]))
+  const sum = estimationSummary(disciplines, estimations, est.id, items, projectRates(project))
+  const thisTotal = sum.actual
+  const advancePct = sum.advanceGlobal
   const numLabel = `#${String(est.number).padStart(3, '0')}`
   const isBorrador = est.status === 'Borrador'
 

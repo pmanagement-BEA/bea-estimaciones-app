@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { projectTotals, projectAdvancePct } from '../utils/calculations'
+import { estimationSummary, projectRates } from '../utils/calculations'
 import { toast } from '../components/Toast'
 
 export default function Dashboard() {
@@ -47,10 +47,9 @@ export default function Dashboard() {
 
   let totalMonto = 0, totalAcumulado = 0
   activeProjects.forEach(p => {
-    const t = projectTotals(p.disciplines || [])
-    const adv = projectAdvancePct(p.disciplines || [], p.estimations || [])
-    totalMonto     += t.estimable
-    totalAcumulado += t.estimable * adv / 100
+    const sum = estimationSummary(p.disciplines || [], p.estimations || [], null, null, projectRates(p))
+    totalMonto     += sum.totals.estimable
+    totalAcumulado += sum.acumGlobal
   })
 
   const aditivasPendientes = aditivas.filter(a =>
@@ -142,10 +141,11 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {filtered.map(p => {
-                const totals  = projectTotals(p.disciplines || [])
-                const advance = projectAdvancePct(p.disciplines || [], p.estimations || [])
-                const acum    = totals.estimable * advance / 100
-                const porFact = Math.max(0, totals.estimable - acum)
+                const sum     = estimationSummary(p.disciplines || [], p.estimations || [], null, null, projectRates(p))
+                const totals  = sum.totals
+                const advance = sum.advanceGlobal
+                const acum    = sum.acumGlobal
+                const porFact = sum.porEstimar
 
                 // Última estimación enviada
                 const enviadas = (p.estimations || []).filter(e => e.status === 'Enviada')

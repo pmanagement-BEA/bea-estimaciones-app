@@ -63,6 +63,8 @@ create table if not exists projects (
   client_contact_email text not null default '',
   meses_fase2          integer not null default 8,
   meses_fase3          integer not null default 18,
+  anticipo_pct         numeric(5,2) not null default 10,
+  finiquito_pct        numeric(5,2) not null default 5,
   team                 jsonb not null default '{"lider":"","cx":"","me":"","consultor":"","coordinador":""}',
   created_at           timestamptz not null default now()
 );
@@ -92,6 +94,7 @@ create table if not exists disciplines (
   monto_total numeric(14,2) not null default 0,
   descuento   numeric(5,2)  not null default 0,
   tarifa_hh   numeric(10,2) not null default 0,
+  area        text check (area is null or area in ('Consultoría','Commissioning','Modelación')),
   sort_order  integer not null default 0
 );
 alter table disciplines enable row level security;

@@ -48,3 +48,27 @@ drop trigger if exists profiles_protect_role on profiles;
 create trigger profiles_protect_role
   before update on profiles
   for each row execute procedure public.protect_profile_role();
+
+-- ── 4. Anticipo y finiquito por proyecto ────────────────────
+-- Regla de BEA (Excel de estimación): estimable = importe con descuento × (1 − anticipo% − finiquito%).
+-- Los proyectos que ya existen se dejan como se calculaban antes (0% anticipo, 10% finiquito)
+-- para que sus montos no cambien; los nuevos arrancan en 10% / 5%. Ajustar en Configuración.
+alter table projects add column if not exists anticipo_pct  numeric(5,2);
+alter table projects add column if not exists finiquito_pct numeric(5,2);
+update projects set anticipo_pct = 0  where anticipo_pct  is null;
+update projects set finiquito_pct = 10 where finiquito_pct is null;
+alter table projects alter column anticipo_pct  set default 10;
+alter table projects alter column finiquito_pct set default 5;
+alter table projects alter column anticipo_pct  set not null;
+alter table projects alter column finiquito_pct set not null;
+
+-- ── 5. Área de cada disciplina (para avance por área y permisos) ──
+-- null = disciplina de finiquito / no cuenta en ningún área.
+alter table disciplines add column if not exists area text
+  check (area is null or area in ('Consultoría','Commissioning','Modelación'));
+update disciplines set area = case
+  when name ilike '%finiquito%' or name ilike '%certificaci%' then null
+  when name ilike '%commission%' or name ilike '%comisiona%' then 'Commissioning'
+  when name ilike '%model%' or name ilike '%eficiencia energ%' then 'Modelación'
+  else 'Consultoría' end
+where area is null;

@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
-import { disciplineSubtotal, projectTotals, conceptAmount } from '../utils/calculations'
+import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS } from '../utils/calculations'
 import { nextNumber } from '../utils/aditivas'
 
 // ── Parseo de CSV ─────────────────────────────────────────────────────────────
@@ -211,6 +211,8 @@ export default function ProjectSetup() {
       currency: p.currency, client_contact_name: p.client_contact_name,
       client_contact_email: p.client_contact_email,
       meses_fase2: p.meses_fase2, meses_fase3: p.meses_fase3, team: p.team,
+      // Solo si la base ya tiene las columnas (migration_2026_11_correcciones.sql)
+      ...('anticipo_pct' in p ? { anticipo_pct: p.anticipo_pct, finiquito_pct: p.finiquito_pct } : {}),
     }).eq('id', p.id)
     setSaving(false)
     if (error) toast('Error al guardar', true)
@@ -415,7 +417,9 @@ export default function ProjectSetup() {
   if (loading) return <div className="main"><div className="spinner" /></div>
   if (!project) return <div className="main"><div className="empty-state"><h3>Proyecto no encontrado</h3></div></div>
 
-  const totals = projectTotals(disciplines)
+  const rates = projectRates(project)
+  const totals = projectTotals(disciplines, rates)
+  const hasRateColumns = 'anticipo_pct' in project
   const sentCount = estimations.filter(e => e.status === 'Enviada').length
   const teamMembers = getTeamMembers()
 
@@ -464,9 +468,9 @@ export default function ProjectSetup() {
           <div className="stat-sub">{project.currency}</div>
         </div>
         <div className="stat-box">
-          <div className="stat-label">Estimable (100%)</div>
-          <div className="stat-value green">{fmtMoney(totals.conDescuento, project.currency)}</div>
-          <div className="stat-sub">Finiquito: {fmtMoney(totals.finiquito, project.currency)}</div>
+          <div className="stat-label">Estimable ({fmtPct(100 - rates.anticipoPct - rates.finiquitoPct)})</div>
+          <div className="stat-value green">{fmtMoney(totals.estimable, project.currency)}</div>
+          <div className="stat-sub">Con descuento: {fmtMoney(totals.conDescuento, project.currency)} · Anticipo: {fmtMoney(totals.anticipo, project.currency)} · Finiquito: {fmtMoney(totals.finiquito, project.currency)}</div>
         </div>
         <div className="stat-box">
           <div className="stat-label">Estimaciones</div>
@@ -530,6 +534,16 @@ export default function ProjectSetup() {
             <input type="number" min="1" max="60" value={project.meses_fase3}
               onChange={e => setProjectField('meses_fase3', parseInt(e.target.value) || 18)} />
           </Field>
+          <Field label="Anticipo (% del importe con descuento)">
+            <input type="number" min="0" max="100" step="0.01" value={rates.anticipoPct} disabled={!hasRateColumns}
+              title={hasRateColumns ? '' : 'Falta correr la migración de la base de datos'}
+              onChange={e => setProjectField('anticipo_pct', parseFloat(e.target.value) || 0)} />
+          </Field>
+          <Field label="Finiquito (% retenido hasta certificación)">
+            <input type="number" min="0" max="100" step="0.01" value={rates.finiquitoPct} disabled={!hasRateColumns}
+              title={hasRateColumns ? '' : 'Falta correr la migración de la base de datos'}
+              onChange={e => setProjectField('finiquito_pct', parseFloat(e.target.value) || 0)} />
+          </Field>
           <Field label="Cliente responsable (nombre)">
             <input value={project.client_contact_name} onChange={e => setProjectField('client_contact_name', e.target.value)} />
           </Field>
@@ -587,6 +601,7 @@ export default function ProjectSetup() {
               <thead>
                 <tr>
                   <th style={{ minWidth: 220 }}>Disciplina</th>
+                  <th>Área</th>
                   <th className="num">Monto Total</th>
                   <th className="num">Desc. %</th>
                   <th className="num">Con Descuento</th>
@@ -598,7 +613,7 @@ export default function ProjectSetup() {
               </thead>
               <tbody>
                 {disciplines.map(d => {
-                  const s = disciplineSubtotal(d)
+                  const s = disciplineSubtotal(d, rates)
                   return (
                     <tr key={d.id}>
                       <td>
@@ -606,6 +621,14 @@ export default function ProjectSetup() {
                           style={{ width: '100%', minWidth: 200, resize: 'vertical', fontSize: 13, padding: '5px 7px', border: '1px solid var(--border)', borderRadius: 4, fontFamily: 'inherit', lineHeight: 1.4, background: 'transparent' }}
                           value={d.name}
                           onChange={e => saveDisciplineField(d.id, 'name', e.target.value)} />
+                      </td>
+                      <td>
+                        <select value={disciplineArea(d) || ''} disabled={!('area' in d)}
+                          title={'area' in d ? '' : 'Falta correr la migración de la base de datos'}
+                          onChange={e => saveDisciplineField(d.id, 'area', e.target.value || null)}>
+                          <option value="">— (finiquito)</option>
+                          {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
+                        </select>
                       </td>
                       <td className="num">
                         <input type="number" step="0.01" style={{ textAlign: 'right' }}
@@ -639,6 +662,7 @@ export default function ProjectSetup() {
                 {/* Fila de totales */}
                 <tr style={{ background: 'var(--surface)', fontWeight: 700 }}>
                   <td>TOTALES</td>
+                  <td></td>
                   <td className="num">{fmtMoney(totals.importeTotal, project.currency)}</td>
                   <td></td>
                   <td className="num">{fmtMoney(totals.conDescuento, project.currency)}</td>
@@ -666,7 +690,7 @@ export default function ProjectSetup() {
           </div>
 
           {disciplines.map(d => {
-            const s = disciplineSubtotal(d)
+            const s = disciplineSubtotal(d, rates)
             const totalPct = d.concepts.reduce((sum, c) => sum + (parseFloat(c.pct) || 0), 0)
             const roundedPct = Math.round(totalPct * 10) / 10
             const advPct = disciplineAdvancePct(d, estimations)
@@ -734,7 +758,7 @@ export default function ProjectSetup() {
                               onChange={e => saveConceptField(d.id, c.id, 'pct', parseFloat(e.target.value) || 0)} />
                           </td>
                           <td className="num">
-                            <strong>{fmtMoney(conceptAmount(c, d), project.currency)}</strong>
+                            <strong>{fmtMoney(conceptAmount(c, d, rates, disciplines), project.currency)}</strong>
                           </td>
                           <td>
                             <select value={c.type || 'Normal'}
