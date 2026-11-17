@@ -5,7 +5,9 @@ import { toast } from '../components/Toast'
 import {
   AREAS_DIRECTORIO, ROLES_APP, fetchDirectorio, normEmail, parseDirectorioPaste,
 } from '../lib/directorio'
-import { asignarContrasenaTemporal, fetchCuentas, generarTemporal } from '../lib/accesos'
+import {
+  asignarContrasenaTemporal, fetchCuentas, generarTemporal, crearCuentasMasivo, mensajeBienvenida, csvCuentas,
+} from '../lib/accesos'
 
 const EMPTY = { email: '', nombre: '', area: '', puesto: '', rol_app: 'colaborador', activo: true }
 
@@ -22,6 +24,7 @@ export default function Directorio() {
   const [preview, setPreview] = useState(null)
   const [cuentas, setCuentas] = useState({})
   const [clave, setClave] = useState(null) // { email, valor, lista }
+  const [masivo, setMasivo] = useState(null) // { hechos, total, resultados }
 
   useEffect(() => { load() }, [profile?.role])
 
@@ -40,6 +43,34 @@ export default function Directorio() {
     setClave({ ...clave, lista: true })
     toast(resultado === 'creada' ? 'Cuenta creada ✓' : 'Contraseña temporal asignada ✓')
     setCuentas(await fetchCuentas())
+  }
+
+  const sinCuenta = rows.filter(r => r.activo && !cuentas[r.email]?.tiene_cuenta)
+
+  async function crearTodas() {
+    if (!sinCuenta.length) return
+    if (!window.confirm(`Se crearán ${sinCuenta.length} cuentas con contraseña temporal. Las contraseñas solo se mostrarán ahora: descárgalas o cópialas antes de salir de esta pantalla. ¿Continuar?`)) return
+    setMasivo({ hechos: 0, total: sinCuenta.length, resultados: null })
+    const resultados = await crearCuentasMasivo(
+      sinCuenta.map(r => ({ nombre: r.nombre, email: r.email, area: r.area })),
+      (hechos, total) => setMasivo(m => ({ ...m, hechos, total })))
+    setMasivo({ hechos: resultados.length, total: resultados.length, resultados })
+    const ok = resultados.filter(r => r.ok).length
+    toast(`${ok} cuentas creadas${ok < resultados.length ? ` · ${resultados.length - ok} con aviso` : ''} ✓`)
+    setCuentas(await fetchCuentas())
+  }
+
+  function descargarCsv() {
+    const blob = new Blob([csvCuentas(masivo.resultados)], { type: 'text/csv;charset=utf-8' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = `cuentas-bea-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(a.href)
+  }
+
+  async function copiar(texto, que) {
+    try { await navigator.clipboard.writeText(texto); toast(`${que} copiado ✓`) } catch { toast('No se pudo copiar', true) }
   }
 
   async function saveRow(row) {
@@ -106,6 +137,55 @@ export default function Directorio() {
           </div>
         </div>
       </div>
+
+      {isCoord && (
+        <div className="card mb-md">
+          <div className="section-header">
+            <div className="section-title">Cuentas de la app</div>
+            {!masivo?.resultados && (
+              <button className="btn btn-primary" disabled={!sinCuenta.length || (masivo && !masivo.resultados)} onClick={crearTodas}>
+                {masivo && !masivo.resultados ? `Creando ${masivo.hechos} de ${masivo.total}…`
+                  : sinCuenta.length ? `🔑 Crear cuentas para todos (${sinCuenta.length})` : 'Todos tienen cuenta ✓'}
+              </button>
+            )}
+          </div>
+          {!masivo?.resultados ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {sinCuenta.length
+                ? `${sinCuenta.length} colaboradores activos aún no tienen cuenta. Se crean con una contraseña temporal; al entrar, cada quien crea la suya.`
+                : 'Todos los colaboradores activos tienen cuenta.'}
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, background: 'var(--warning-soft, #FFF8E6)', padding: '8px 12px', borderRadius: 'var(--radius)', marginBottom: 10 }}>
+                ⚠ Estas contraseñas temporales <strong>solo se muestran ahora</strong>. Descárgalas o copia el mensaje de cada quien antes de salir.
+                Si alguien la pierde, usa <strong>Restablecer</strong> en su renglón.
+              </div>
+              <div className="flex" style={{ gap: 8, marginBottom: 10 }}>
+                <button className="btn btn-primary btn-sm" onClick={descargarCsv}>⬇ Descargar CSV</button>
+                <button className="btn btn-outline btn-sm" onClick={() => copiar(masivo.resultados.filter(r => r.ok).map(mensajeBienvenida).join('\n\n———\n\n'), 'Todos los mensajes')}>Copiar todos los mensajes</button>
+                <button className="btn btn-outline btn-sm" onClick={() => { if (window.confirm('¿Ya guardaste las contraseñas? Al cerrar ya no se podrán ver.')) setMasivo(null) }}>Cerrar</button>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Nombre</th><th>Correo</th><th>Contraseña temporal</th><th>Resultado</th><th></th></tr></thead>
+                  <tbody>
+                    {masivo.resultados.map(r => (
+                      <tr key={r.email}>
+                        <td>{r.nombre}</td>
+                        <td style={{ fontSize: 12 }}>{r.email}</td>
+                        <td style={{ fontFamily: 'monospace' }}>{r.clave || '—'}</td>
+                        <td style={{ fontSize: 12, color: r.ok ? 'var(--green-dark)' : 'var(--danger)' }}>{r.ok ? 'Creada' : r.error}</td>
+                        <td>{r.ok && <button className="btn btn-sm btn-outline" onClick={() => copiar(mensajeBienvenida(r), 'Mensaje')}>Copiar mensaje</button>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {isCoord && (
         <div className="grid grid-2 mb-md" style={{ gap: 16 }}>
