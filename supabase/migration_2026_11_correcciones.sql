@@ -67,7 +67,7 @@ alter table projects alter column finiquito_pct set not null;
 alter table disciplines add column if not exists area text
   check (area is null or area in ('Consultoría','Commissioning','Modelación'));
 update disciplines set area = case
-  when name ilike '%finiquito%' or name ilike '%certificaci%' then null
+  when name ilike '%finiquito%' or name ilike 'certificaci%' then null
   when name ilike '%commission%' or name ilike '%comisiona%' then 'Commissioning'
   when name ilike '%model%' or name ilike '%eficiencia energ%' then 'Modelación'
   else 'Consultoría' end

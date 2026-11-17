@@ -37,7 +37,7 @@ function estimableFactor(rates = LEGACY_RATES) {
 export function disciplineArea(d) {
   if (d?.area) return d.area
   const n = (d?.name || '').toLowerCase()
-  if (/finiquito|certificaci/.test(n)) return null
+  if (/finiquito/.test(n) || /^certificaci/.test(n)) return null
   if (/commission|comisiona|\bcx\b/.test(n)) return 'Commissioning'
   if (/model|eficiencia energ/.test(n)) return 'Modelación'
   return 'Consultoría'

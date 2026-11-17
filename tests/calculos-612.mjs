@@ -3,7 +3,7 @@
 import { estimationSummary } from '../src/utils/calculations.js'
 const D = (id,name,monto,concepts)=>({id,name,monto_total:monto,descuento:5,concepts:concepts.map(([cid,pct,type='Normal'])=>({id:cid,pct,type}))})
 const discs=[
- D('f1','Fase Uno: Diagnóstico',45400,[['1.01',25.5],['1.02',25.5],['1.03',49]]),
+ D('f1','Fase Uno: Diagnóstico, Factibilidad y Plan de Acción para Certificación LEED',45400,[['1.01',25.5],['1.02',25.5],['1.03',49]]),
  D('f2','Fase Dos: Asesoría y Gestión LEED Diseño',204800,[['2.01',12.37],['2.02',10.96]]),
  D('f3','Fase Tres: Asesoría y Gestión LEED Construcción',186200,[['3.01',9.76],['3.24',1.31],['3.25',1.31],['3.26',1.31],['3.27',0.92]]),
  D('cx','Fundamental Commissioning',158000,[['4.01',1.77],['4.02',2.42],['4.03',2.42],['4.06',4.39]]),
