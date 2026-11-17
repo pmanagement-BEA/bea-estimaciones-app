@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { projectTotals, projectAdvancePct, projectRates } from '../utils/calculations'
 import { toast } from '../components/Toast'
+import { fetchMyAssignments, TEAM_ROLE_LABEL } from '../lib/directorio'
 
 // TODO: migrar renderProjects() del HTML a esta página
 export default function Projects() {
@@ -12,8 +13,15 @@ export default function Projects() {
   const { profile } = useAuth()
   const [projects, setProjects] = useState([])
   const [loading, setLoading] = useState(true)
+  const [mine, setMine] = useState({}) // { project_id: [rol] }
+  const [onlyMine, setOnlyMine] = useState(true)
+  const isCoord = profile?.role === 'coordinador'
+  const canCreate = !profile || ['lider', 'coordinador'].includes(profile.role)
 
   useEffect(() => { fetchProjects() }, [])
+  useEffect(() => {
+    if (profile?.email) fetchMyAssignments(profile.email).then(setMine)
+  }, [profile?.email])
 
   async function fetchProjects() {
     setLoading(true)
@@ -56,18 +64,28 @@ export default function Projects() {
           <h1 className="page-title">Mis <span className="accent">Proyectos</span></h1>
           <div className="page-subtitle">Herramienta de estimación mensual · BEA</div>
         </div>
-        <button className="btn btn-primary" onClick={createProject}>+ Nuevo Proyecto</button>
+        <div className="flex" style={{ gap: 8, alignItems: 'center' }}>
+          {isCoord && (
+            <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />
+              Solo donde estoy asignado
+            </label>
+          )}
+          {canCreate && <button className="btn btn-primary" onClick={createProject}>+ Nuevo Proyecto</button>}
+        </div>
       </div>
 
       {projects.length === 0 ? (
         <div className="empty-state">
           <h3>No hay proyectos todavía</h3>
-          <p>Comienza creando tu primer proyecto.</p>
-          <button className="btn btn-primary" onClick={createProject}>+ Nuevo Proyecto</button>
+          <p>{canCreate ? 'Comienza creando tu primer proyecto.' : 'Cuando un líder te asigne a un proyecto, aparecerá aquí.'}</p>
+          {canCreate && <button className="btn btn-primary" onClick={createProject}>+ Nuevo Proyecto</button>}
         </div>
       ) : (
         <div className="project-grid">
-          {projects.map(p => {
+          {projects
+            .filter(p => !(isCoord && onlyMine) || mine[p.id] || p.user_id === profile?.id)
+            .map(p => {
             const totals = projectTotals(p.disciplines || [], projectRates(p))
             const advance = projectAdvancePct(p.disciplines || [], p.estimations || [], projectRates(p))
             const statusClass = p.status === 'Pausado' ? 'paused' : p.status === 'Cancelado' ? 'cancelled' : ''
@@ -75,6 +93,15 @@ export default function Projects() {
               <div key={p.id} className={`project-card ${statusClass}`} onClick={() => navigate(`/projects/${p.id}/setup`)}>
                 <span className={`state-badge state-${p.status}`}>{p.status}</span>
                 <h3>{p.name}</h3>
+                {(mine[p.id] || []).length > 0 && (
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', margin: '2px 0 4px' }}>
+                    {mine[p.id].map(r => (
+                      <span key={r} style={{ fontSize: 10, fontWeight: 600, background: 'var(--green-soft)', color: 'var(--green-dark)', padding: '2px 8px', borderRadius: 99 }}>
+                        Tú: {TEAM_ROLE_LABEL[r] || r}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 <div className="project-meta">{p.client} · {p.location || '—'}</div>
                 <div className="project-meta">{p.service_type} · Fase: {p.phase}</div>
                 <div style={{ marginTop: 6 }}>

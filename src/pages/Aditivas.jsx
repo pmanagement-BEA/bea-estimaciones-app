@@ -5,6 +5,8 @@ import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtDate } from '../utils/format'
 import { incorporarAditivaAlContrato } from '../utils/aditivas'
+import { useAuth } from '../hooks/useAuth'
+import { isReadOnlyRole } from '../lib/directorio'
 
 const STATUS_STYLE = {
   Borrador:    { bg: 'var(--surface-2)',  color: 'var(--text-soft)',  border: 'var(--border-strong)' },
@@ -17,6 +19,8 @@ const ALL_STATUSES = ['Borrador', 'Enviada', 'Aceptada', 'Negada', 'Negociacion'
 
 export default function Aditivas() {
   const { id } = useParams()
+  const { profile } = useAuth()
+  const soloLectura = isReadOnlyRole(profile)
   const navigate = useNavigate()
 
   const [project, setProject]   = useState(null)
@@ -182,6 +186,7 @@ export default function Aditivas() {
                 {/* Estado + acciones */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end' }}>
                   <select
+                    disabled={soloLectura}
                     value={a.status}
                     onChange={e => changeStatus(a.id, e.target.value)}
                     style={{ padding: '5px 10px', borderRadius: 99, fontSize: 11, fontWeight: 700, border: `1.5px solid ${sc.border}`, background: sc.bg, color: sc.color, cursor: 'pointer' }}>

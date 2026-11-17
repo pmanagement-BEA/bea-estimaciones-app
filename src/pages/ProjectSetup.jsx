@@ -6,6 +6,8 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
 import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS } from '../utils/calculations'
 import { nextNumber } from '../utils/aditivas'
+import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
+import { useAuth } from '../hooks/useAuth'
 
 // ── Parseo de CSV ─────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -161,6 +163,8 @@ function disciplineAdvancePct(discipline, estimations) {
 export default function ProjectSetup() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { profile } = useAuth()
+  const soloLectura = isReadOnlyRole(profile)
 
   const [project, setProject] = useState(null)
   const [disciplines, setDisciplines] = useState([])
@@ -169,6 +173,8 @@ export default function ProjectSetup() {
   const [saving, setSaving] = useState(false)
   const [modal, setModal] = useState(null) // { title, body, onConfirm }
   const [csvModal, setCsvModal] = useState(false)
+  const [directorio, setDirectorio] = useState({ available: false, data: [] })
+  const [members, setMembers] = useState({}) // { rol: [email] }
   const saveTimer = useRef(null)
   const csvInputRef = useRef(null)
 
@@ -190,10 +196,24 @@ export default function ProjectSetup() {
       concepts: [...(d.concepts || [])].sort((a, b) => a.sort_order - b.sort_order),
     }))
 
+    const [dir, mem] = await Promise.all([fetchDirectorio(), fetchProjectMembers(id)])
+
     setProject(projRes.data)
     setDisciplines(discs)
     setEstimations(estRes.data || [])
+    setDirectorio(dir)
+    setMembers(mem.byRol || {})
     setLoading(false)
+  }
+
+  // Asignar a una persona del directorio: queda en el equipo y el proyecto le aparece en su cuenta
+  async function assignTeamRole(role, email) {
+    const person = directorio.data.find(p => p.email === email)
+    setMembers(prev => ({ ...prev, [role]: email ? [email] : [] }))
+    setTeamField(role, person ? person.nombre : '')
+    const { error } = await setProjectRole(id, role, email)
+    if (error) { toast('No se pudo asignar: ' + error.message, true); return }
+    toast(person ? `${person.nombre} asignado ✓ — ya lo ve en su cuenta` : 'Asignación quitada')
   }
 
   // ── Auto-save con debounce (600ms) ─────────────────────────────────────────
@@ -487,6 +507,10 @@ export default function ProjectSetup() {
         </div>
       </div>
 
+      {soloLectura && (
+        <div className="readonly-banner" style={{ marginBottom: 16 }}>👁 Tienes acceso de solo lectura a este proyecto.</div>
+      )}
+      <fieldset disabled={soloLectura} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       {/* ── Datos Generales ────────────────────────────────────── */}
       <div className="card mb-md">
         <div className="section-header"><div className="section-title">Datos Generales</div></div>
@@ -557,13 +581,45 @@ export default function ProjectSetup() {
       <div className="card mb-md">
         <div className="section-header">
           <div className="section-title">Equipo del Proyecto</div>
-          <button className="btn btn-outline btn-sm" onClick={() => {
-            const name = prompt('Nombre del nuevo miembro del equipo:')
-            if (name?.trim()) saveTeamMemberLocally(name.trim())
-          }}>+ Agregar miembro</button>
+          {directorio.available ? (
+            <button className="btn btn-outline btn-sm" onClick={() => navigate('/directorio')}>👥 Directorio</button>
+          ) : (
+            <button className="btn btn-outline btn-sm" onClick={() => {
+              const name = prompt('Nombre del nuevo miembro del equipo:')
+              if (name?.trim()) saveTeamMemberLocally(name.trim())
+            }}>+ Agregar miembro</button>
+          )}
         </div>
+        {directorio.available && (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+            Quien asignes aquí verá este proyecto automáticamente al entrar con su cuenta.
+          </div>
+        )}
         <div className="grid grid-3">
-          {TEAM_ROLES.map(([role, label]) => (
+          {directorio.available && TEAM_ROLES.map(([role, label]) => {
+            const current = (members[role] || [])[0] || ''
+            const area = TEAM_ROLE_AREA[role]
+            const activos = directorio.data.filter(p => p.activo)
+            const sugeridos = area ? activos.filter(p => p.area === area) : activos
+            const otros = area ? activos.filter(p => p.area !== area) : []
+            const legacy = !current && (project.team || {})[role]
+            return (
+              <Field key={role} label={label}>
+                <select value={current} onChange={e => assignTeamRole(role, e.target.value)}>
+                  <option value="">{legacy ? `${legacy} (sin cuenta ligada)` : '— Seleccionar —'}</option>
+                  <optgroup label={area || 'Todos'}>
+                    {sugeridos.map(p => <option key={p.email} value={p.email}>{p.nombre}</option>)}
+                  </optgroup>
+                  {otros.length > 0 && (
+                    <optgroup label="Otras áreas">
+                      {otros.map(p => <option key={p.email} value={p.email}>{p.nombre} · {p.area || 'sin área'}</option>)}
+                    </optgroup>
+                  )}
+                </select>
+              </Field>
+            )
+          })}
+          {!directorio.available && TEAM_ROLES.map(([role, label]) => (
             <Field key={role} label={label}>
               <select value={(project.team || {})[role] || ''} onChange={e => {
                 const val = e.target.value
@@ -794,6 +850,8 @@ export default function ProjectSetup() {
           })}
         </div>
       )}
+
+      </fieldset>
 
       {/* ── Botón final ────────────────────────────────────────── */}
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '2px solid var(--green)' }}>
