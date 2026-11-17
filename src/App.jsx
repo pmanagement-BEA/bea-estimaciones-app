@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { pideContrasena } from './lib/supabase'
+import { pideContrasena, supabase } from './lib/supabase'
 import CrearContrasena from './pages/CrearContrasena'
 import { useAuth } from './hooks/useAuth'
 import TopBar from './components/TopBar'
@@ -28,8 +28,10 @@ export default function App() {
   const [tipoContrasena, setTipoContrasena] = useState(pideContrasena())
 
   if (loading) return <div className="spinner" style={{ marginTop: 80 }} />
-  if (session && tipoContrasena) {
-    return <CrearContrasena tipo={tipoContrasena} email={session.user?.email} onListo={() => setTipoContrasena(null)} />
+  const temporal = session?.user?.user_metadata?.debe_cambiar_contrasena === true
+  if (session && (tipoContrasena || temporal)) {
+    return <CrearContrasena tipo={tipoContrasena || 'temporal'} email={session.user?.email}
+      onListo={async () => { await supabase.auth.refreshSession(); setTipoContrasena(null) }} />
   }
 
   return (
