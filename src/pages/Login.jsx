@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { supabase } from '../lib/supabase'
 
 export default function Login() {
   const { signIn } = useAuth()
@@ -10,13 +9,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [aviso, setAviso] = useState('')
 
-  async function olvide() {
-    setError(''); setAviso('')
-    if (!email) return setError('Escribe tu correo y vuelve a dar clic en "¿Olvidaste tu contraseña?".')
-    const redirectTo = window.location.origin + import.meta.env.BASE_URL
-    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
-    if (error) return setError(error.message)
-    setAviso(`Te enviamos un correo a ${email} para crear una contraseña nueva.`)
+  function olvide() {
+    setError('')
+    setAviso('Pídele a tu coordinador de área (o al PMO) una contraseña temporal. La asignan en Directorio y al entrar con ella creas la tuya.')
   }
 
   async function handleSubmit(e) {
@@ -83,7 +78,7 @@ export default function Login() {
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
             <button type="button" onClick={olvide} style={{ background: 'none', border: 'none', color: 'var(--text-soft)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
-              ¿Olvidaste tu contraseña?
+              ¿Olvidaste tu contraseña o es tu primera vez?
             </button>
           </form>
         </div>

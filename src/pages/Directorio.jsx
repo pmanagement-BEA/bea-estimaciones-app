@@ -5,6 +5,7 @@ import { toast } from '../components/Toast'
 import {
   AREAS_DIRECTORIO, ROLES_APP, fetchDirectorio, normEmail, parseDirectorioPaste,
 } from '../lib/directorio'
+import { asignarContrasenaTemporal, fetchCuentas, generarTemporal } from '../lib/accesos'
 
 const EMPTY = { email: '', nombre: '', area: '', puesto: '', rol_app: 'colaborador', activo: true }
 
@@ -19,15 +20,26 @@ export default function Directorio() {
   const [nuevo, setNuevo] = useState(EMPTY)
   const [paste, setPaste] = useState('')
   const [preview, setPreview] = useState(null)
+  const [cuentas, setCuentas] = useState({})
+  const [clave, setClave] = useState(null) // { email, valor, lista }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [profile?.role])
 
   async function load() {
     setLoading(true)
     const res = await fetchDirectorio()
     setAvailable(res.available)
     setRows(res.data)
+    if (profile?.role === 'coordinador') setCuentas(await fetchCuentas())
     setLoading(false)
+  }
+
+  async function guardarClave() {
+    const { resultado, error } = await asignarContrasenaTemporal(clave.email, clave.valor)
+    if (error) { toast('No se pudo: ' + error.message, true); return }
+    setClave({ ...clave, lista: true })
+    toast(resultado === 'creada' ? 'Cuenta creada ✓' : 'Contraseña temporal asignada ✓')
+    setCuentas(await fetchCuentas())
   }
 
   async function saveRow(row) {
@@ -154,12 +166,12 @@ export default function Directorio() {
           <table>
             <thead>
               <tr>
-                <th>Nombre</th><th>Correo</th><th>Área</th><th>Puesto</th><th>Permisos</th><th className="center">Activo</th>
+                <th>Nombre</th><th>Correo</th><th>Área</th><th>Puesto</th><th>Permisos</th><th className="center">Activo</th>{isCoord && <th>Cuenta</th>}
               </tr>
             </thead>
             <tbody>
               {visible.length === 0 ? (
-                <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>
+                 <tr><td colSpan={isCoord ? 7 : 6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>
                   {rows.length === 0 ? 'El directorio está vacío.' : 'Sin resultados'}
                 </td></tr>
               ) : visible.map(r => (
@@ -188,6 +200,37 @@ export default function Directorio() {
                     <input type="checkbox" checked={r.activo} disabled={!isCoord}
                       onChange={e => updateField(r.email, 'activo', e.target.checked)} />
                   </td>
+                  {isCoord && (() => {
+                    const c = cuentas[r.email]
+                    if (clave?.email === r.email) return (
+                      <td style={{ minWidth: 230 }}>
+                        {clave.lista ? (
+                          <div style={{ fontSize: 12 }}>
+                            Dale esta contraseña temporal a {r.nombre.split(' ')[0]}:<br />
+                            <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>{clave.valor}</strong><br />
+                            <span style={{ color: 'var(--text-muted)' }}>Al entrar, la app le pedirá crear la suya.</span>{' '}
+                            <a onClick={() => setClave(null)} style={{ cursor: 'pointer' }}>Listo</a>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <input value={clave.valor} onChange={e => setClave({ ...clave, valor: e.target.value })} style={{ fontFamily: 'monospace', width: 130 }} />
+                            <button className="btn btn-sm btn-primary" onClick={guardarClave}>Asignar</button>
+                            <button className="btn btn-sm btn-outline" onClick={() => setClave(null)}>✕</button>
+                          </div>
+                        )}
+                      </td>
+                    )
+                    return (
+                      <td style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
+                        {!c?.tiene_cuenta ? <span style={{ color: 'var(--text-muted)' }}>Sin cuenta</span>
+                          : c.debe_cambiar ? <span style={{ color: 'var(--warning)' }}>Temporal pendiente</span>
+                          : <span style={{ color: 'var(--green-dark)' }}>Activa{c.ultimo_acceso ? ` · ${new Date(c.ultimo_acceso).toLocaleDateString('es-MX')}` : ''}</span>}{' '}
+                        {r.activo && <button className="btn btn-sm btn-outline" style={{ marginLeft: 6 }} onClick={() => setClave({ email: r.email, valor: generarTemporal(), lista: false })}>
+                          🔑 {c?.tiene_cuenta ? 'Restablecer' : 'Crear cuenta'}
+                        </button>}
+                      </td>
+                    )
+                  })()}
                 </tr>
               ))}
             </tbody>

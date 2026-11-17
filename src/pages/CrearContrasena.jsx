@@ -13,8 +13,9 @@ export default function CrearContrasena({ tipo, email, onListo }) {
     setError('')
     if (pass.length < 8) return setError('Usa al menos 8 caracteres.')
     if (pass !== pass2) return setError('Las contraseñas no coinciden.')
+    if (/^BEA-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(pass)) return setError('Usa una contraseña distinta a la temporal.')
     setLoading(true)
-    const { error } = await supabase.auth.updateUser({ password: pass })
+    const { error } = await supabase.auth.updateUser({ password: pass, data: { debe_cambiar_contrasena: false } })
     setLoading(false)
     if (error) return setError(error.message)
     contrasenaLista()
@@ -25,10 +26,12 @@ export default function CrearContrasena({ tipo, email, onListo }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div className="card" style={{ width: '100%', maxWidth: 380, boxShadow: 'var(--shadow-lg)' }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--navy)', marginBottom: 6 }}>
-          {tipo === 'recovery' ? 'Nueva contraseña' : 'Bienvenido a BEA Estimaciones'}
+          {tipo === 'recovery' ? 'Nueva contraseña' : tipo === 'temporal' ? 'Crea tu contraseña' : 'Bienvenido a BEA Estimaciones'}
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-soft)', marginBottom: 18 }}>
-          {tipo === 'recovery' ? 'Escribe tu nueva contraseña' : 'Crea tu contraseña para entrar'}{email ? <> como <strong>{email}</strong></> : null}.
+          {tipo === 'recovery' ? 'Escribe tu nueva contraseña'
+            : tipo === 'temporal' ? 'Entraste con una contraseña temporal. Crea la tuya para seguir'
+            : 'Crea tu contraseña para entrar'}{email ? <> como <strong>{email}</strong></> : null}.
         </div>
         <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div className="field">
@@ -42,6 +45,9 @@ export default function CrearContrasena({ tipo, email, onListo }) {
           {error && <div style={{ fontSize: 13, color: 'var(--danger)', background: 'var(--danger-soft)', padding: '8px 12px', borderRadius: 'var(--radius)' }}>{error}</div>}
           <button className="btn btn-primary" type="submit" disabled={loading}>{loading ? 'Guardando...' : 'Guardar y entrar'}</button>
         </form>
+        <button type="button" onClick={() => supabase.auth.signOut()} style={{ marginTop: 12, background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}>
+          Salir
+        </button>
       </div>
     </div>
   )
