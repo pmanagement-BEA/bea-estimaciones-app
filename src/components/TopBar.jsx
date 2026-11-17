@@ -15,6 +15,9 @@ export default function TopBar({ profile, onSignOut }) {
         <button className="btn-ghost" style={{ color: 'rgba(255,255,255,.85)', fontSize: 12 }} onClick={() => navigate('/')}>
           Proyectos
         </button>
+        <button className="btn-ghost" style={{ color: 'rgba(255,255,255,.85)', fontSize: 12 }} onClick={() => navigate('/directorio')}>
+          👥 Directorio
+        </button>
         {profile && (
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,.7)' }}>
             {profile.nombre || profile.email}
