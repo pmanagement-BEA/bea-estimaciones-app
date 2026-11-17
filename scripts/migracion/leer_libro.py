@@ -123,7 +123,12 @@ def leer_hoja(ws):
         k = claves[i]
         for nxt in claves[i + 1:i + 4]:
             if nxt:
-                return bool(k) and nxt.upper().startswith(k.upper() + ".")
+                if bool(k) and nxt.upper().startswith(k.upper() + "."):
+                    return True
+                # "60.a" con hijos "60a.01": misma clave sin el punto
+                k2 = k.replace(".", "").upper()
+                return (re.fullmatch(r"\d+\.?[A-Za-z]", k) is not None
+                        and nxt.replace(".", "").upper().startswith(k2) and len(nxt) > len(k))
         return False
 
     for r in range(col["fila"] + 1, ws.max_row + 1):
@@ -139,8 +144,23 @@ def leer_hoja(ws):
         if clave.upper() in ("X.X", "X") or re.fullmatch(r"CONCEPTO \d+", concepto.upper()):
             continue  # filas vacías de la plantilla
         clave = re.sub(r"\.0$", "", clave) if es_disciplina(clave) else clave
+        if clave == "0" and actual is not None:
+            # "0" es disciplina solo si le siguen conceptos "0.x" (516, 523). En 470 es un concepto
+            # de Commissioning con la clave mal escrita: lo siguen conceptos de la disciplina 4.
+            sig = next((k for k in claves[r - col["fila"]:r - col["fila"] + 3] if k), "")
+            if not sig.startswith("0."):
+                clave = f"{actual['clave']}.00"
         monto_txt = txt(ws.cell(r, col["monto"]).value).upper() if "monto" in col else ""
-        if es_disciplina(clave) or disc_por_hijos:
+        # Subdisciplina tipo "2.D" con 100 % cuyos conceptos se copiaron con la clave de otra ("2.C.01"…)
+        pct_fila = num(ws.cell(r, col["pct"]).value)
+        sub_al_100 = (re.fullmatch(r"\d+\.[A-Za-z]", clave) is not None and pct_fila is not None
+                      and abs(pct_fila - 1) < 1e-6)
+        # Encabezado repetido: "9B FINIQUITO (5%)" con el importe en la columna de marcas, seguido de "9B Finiquito"
+        sig = next((k for k in claves[r - col["fila"]:r - col["fila"] + 3] if k), "")
+        marca_fila = max(num(ws.cell(r, col["esta"]).value) or 0.0,
+                         (num(ws.cell(r, col["anterior"]).value) or 0.0) if "anterior" in col else 0.0)
+        encabezado_repetido = bool(clave) and sig.upper() == clave.upper() and marca_fila > 1.5
+        if es_disciplina(clave) or disc_por_hijos or sub_al_100 or encabezado_repetido:
             actual = {
                 "clave": clave, "nombre": concepto,
                 "estimable": num(ws.cell(r, col["monto"]).value) if "monto" in col else None,
@@ -160,7 +180,7 @@ def leer_hoja(ws):
             "descripcion": concepto,
             "entregable": txt(ws.cell(r, col["entregable"]).value) if "entregable" in col else "",
             "pct": (pct or 0.0) * 100 if pct is not None and pct <= 1.0001 else (pct or 0.0),
-            "monto_excel": num(ws.cell(r, col["monto"]).value),
+            "monto_excel": num(ws.cell(r, col["monto"]).value) if "monto" in col else None,
             "finiquito": actual["finiquito"] or "FINIQUITO" in monto_txt,
             "marca_anterior": marca_ant,
             "marca_esta": marca_esta,
