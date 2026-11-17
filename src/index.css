@@ -116,6 +116,7 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .state-badge{position:absolute;top:14px;right:14px;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:3px 8px;border-radius:99px;font-weight:700}
 .state-Activo{background:var(--green-soft);color:var(--green-dark)}
 .state-Pausado{background:var(--warning-soft);color:var(--warning)}
+.state-Terminado{background:var(--surface-2);color:var(--navy)}
 .state-Cancelado{background:#F3F5F7;color:var(--text-muted)}
 .progress{height:6px;background:var(--surface-2);border-radius:99px;overflow:hidden;width:100%}
 .progress-bar{height:100%;background:var(--green);border-radius:99px;transition:width .3s ease}

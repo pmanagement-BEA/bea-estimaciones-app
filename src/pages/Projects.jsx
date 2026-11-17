@@ -88,11 +88,16 @@ export default function Projects() {
             .map(p => {
             const totals = projectTotals(p.disciplines || [], projectRates(p))
             const advance = projectAdvancePct(p.disciplines || [], p.estimations || [], projectRates(p))
-            const statusClass = p.status === 'Pausado' ? 'paused' : p.status === 'Cancelado' ? 'cancelled' : ''
+            const statusClass = p.status === 'Pausado' ? 'paused' : (p.status === 'Cancelado' || p.status === 'Terminado') ? 'cancelled' : ''
             return (
               <div key={p.id} className={`project-card ${statusClass}`} onClick={() => navigate(`/projects/${p.id}/setup`)}>
                 <span className={`state-badge state-${p.status}`}>{p.status}</span>
                 <h3>{p.name}</h3>
+                {p.origen_datos === 'sin_estimaciones' && !(p.estimations || []).some(e => e.status === 'Enviada') && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--warning)', margin: '2px 0 4px' }}>
+                    ⚠ Sin estimaciones encontradas · carga manual al activarse
+                  </div>
+                )}
                 {(mine[p.id] || []).length > 0 && (
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', margin: '2px 0 4px' }}>
                     {mine[p.id].map(r => (
