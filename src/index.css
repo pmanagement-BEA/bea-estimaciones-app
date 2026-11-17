@@ -36,7 +36,7 @@ button{font-family:inherit;font-size:inherit;cursor:pointer;border:none;backgrou
 input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 
 /* App shell */
-.topbar{background:var(--navy);color:#fff;padding:10px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--green);position:sticky;top:0;z-index:50}
+.topbar{background:var(--green-dark);color:#fff;padding:10px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--green);position:sticky;top:0;z-index:50}
 .brand{display:flex;align-items:center;gap:12px}
 .brand-mark{font-weight:800;font-size:22px;letter-spacing:.5px;position:relative;padding-right:14px}
 .brand-mark::after{content:"";position:absolute;right:0;top:4px;width:10px;height:10px;background:var(--green);transform:skewX(-15deg);border-radius:2px}
