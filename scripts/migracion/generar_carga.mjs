@@ -13,6 +13,10 @@ import fs from 'fs'
 import crypto from 'crypto'
 import { estimationSummary } from '../../src/utils/calculations.js'
 import { aModeloApp } from './conciliar.mjs'
+import { leerAjustes, aplicarAjustes } from './ajustes.mjs'
+
+// Ajustes documentados (fuera del repo): BEA_AJUSTES=ruta/ajustes.json
+const AJUSTES = leerAjustes(process.env.BEA_AJUSTES)
 
 const TOL = 1
 // Correo del perfil coordinador que queda como dueño técnico de los proyectos migrados.
@@ -216,7 +220,9 @@ export function generar({ lectura, estadoCsv, colabCsv, corte = '2026-10' }) {
   for (const f of filas) {
     const pk = claveDeProyecto(f.Proyecto)
     const origen = f['Origen datos']
-    const libro = libros.find(l => claveDeArchivo(l.archivo) === pk && l.meses.length)
+    const ajuste = AJUSTES[pk]
+    const libroLeido = libros.find(l => claveDeArchivo(l.archivo) === pk && l.meses.length)
+    const libro = libroLeido && aplicarAjustes(libroLeido, ajuste)
     const responsables = [['lider', f['Consultoría']], ['cx', f.Commissioning], ['me', f['Modelación']]]
       .filter(([, n]) => n && /[a-z]/i.test(n) && !/no contratado|terminado|sin responsable/i.test(n))
     const miembros = responsables.map(([rol, n]) => ({ rol, email: email(n), nombre: n })).filter(m => m.email)
@@ -247,7 +253,7 @@ export function generar({ lectura, estadoCsv, colabCsv, corte = '2026-10' }) {
     const status = STATUS[f.Estado] || 'Pausado'
     sql.push(`\n-- ${f.Proyecto} · ${libro.archivo.split('/').pop()} · ${mod.estimaciones.map(e => e.hoja).join(' + ')}`)
     sql.push(sqlProyecto({ ...base, status, rates: mod.rates, origen: esCliente ? 'formato_cliente' : 'libro', moneda: libro.moneda || 'MXN',
-      nota: `Importado de ${libro.archivo.split('/').pop()}${esCliente ? ' (formato del cliente: CARÁTULA + SOPORTE EST.)' : ''} (${mod.estimaciones.map(e => `${e.tipo === 'corte' ? 'saldo al corte' : 'estimación'} ${e.hoja}`).join('; ')}). Conciliado al peso contra el Excel.${mod.modo === 'montos' ? ' Montos de conceptos tomados del Excel.' : ''}` }))
+      nota: `Importado de ${libro.archivo.split('/').pop()}${esCliente ? ' (formato del cliente: CARÁTULA + SOPORTE EST.)' : ''} (${mod.estimaciones.map(e => `${e.tipo === 'corte' ? 'saldo al corte' : 'estimación'} ${e.hoja}`).join('; ')}). Conciliado al peso contra el Excel.${mod.modo === 'montos' ? ' Montos de conceptos tomados del Excel.' : ''}${ajuste?.evidencia ? ` Ajuste documentado: ${ajuste.evidencia}` : ''}` }))
     sql.push(sqlEstructura(pid, mod))
     sql.push(sqlEstimaciones(pid, mod))
     sql.push(sqlMiembros(pid, miembros))
