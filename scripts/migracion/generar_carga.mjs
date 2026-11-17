@@ -120,7 +120,7 @@ export function modeloCarga(libro, corte, porMontos = false) {
       if (!concept) { faltantes.push(`${h.hoja}: ${c.clave}`); return }
       items.push(item(eid, concept, frac))
     })
-    estimaciones.push({ id: eid, number: hastaCorte.length, periodo: h.periodo, hoja: h.hoja, tipo: 'corte', items, excel: h.encabezado })
+    estimaciones.push({ id: eid, number: h.numero ?? hastaCorte.length, periodo: h.periodo, hoja: h.hoja, tipo: 'corte', items, excel: h.encabezado })
   }
   despues.forEach((h, k) => {
     const eid = uid('est', pk, 'mes', h.periodo)
@@ -130,7 +130,7 @@ export function modeloCarga(libro, corte, porMontos = false) {
       if (!concept) { faltantes.push(`${h.hoja}: ${c.clave}`); return }
       items.push(item(eid, concept, Math.min(1, c.marca_esta)))
     })
-    estimaciones.push({ id: eid, number: hastaCorte.length + k + 1, periodo: h.periodo, hoja: h.hoja, tipo: 'mes', items, excel: h.encabezado })
+    estimaciones.push({ id: eid, number: (hastaCorte.at(-1)?.numero ?? hastaCorte.length) + k + 1, periodo: h.periodo, hoja: h.hoja, tipo: 'mes', items, excel: h.encabezado })
   })
 
   // Verificación: después de cada estimación, el acumulado de la app (ya redondeado) = acumulado del Excel
@@ -152,9 +152,9 @@ export function mejorModelo(libro, corte) {
 }
 
 // ── SQL ──────────────────────────────────────────────────────────────────────
-function sqlProyecto({ id, nombre, status, rates, team, origen, nota }) {
-  return `insert into projects (id, user_id, name, status, anticipo_pct, finiquito_pct, team, origen_datos, nota_migracion)
-select ${q(id)}, (select id from profiles where email = ${q(DUENO)}), ${q(nombre)}, ${q(status)}, ${rates.anticipoPct}, ${rates.finiquitoPct},
+function sqlProyecto({ id, nombre, status, rates, team, origen, nota, moneda = 'MXN' }) {
+  return `insert into projects (id, user_id, name, status, currency, anticipo_pct, finiquito_pct, team, origen_datos, nota_migracion)
+select ${q(id)}, (select id from profiles where email = ${q(DUENO)}), ${q(nombre)}, ${q(status)}, ${q(moneda)}, ${rates.anticipoPct}, ${rates.finiquitoPct},
   ${q(JSON.stringify(team))}::jsonb, ${q(origen)}, ${q(nota)}
 where not exists (select 1 from projects where name = ${q(nombre)} and id <> ${q(id)})
 on conflict (id) do nothing;`
@@ -201,7 +201,8 @@ where ${siProyecto(pid)} on conflict do nothing;`
 // ── principal ────────────────────────────────────────────────────────────────
 export function generar({ lectura, estadoCsv, colabCsv, corte = '2026-10' }) {
   if (!DUENO) throw new Error('Falta BEA_DUENO (correo del coordinador dueño de los proyectos migrados)')
-  const libros = JSON.parse(fs.readFileSync(lectura, 'utf8'))
+  // lectura puede ser varias rutas separadas por coma (libros BEA + formatos del cliente)
+  const libros = lectura.split(',').flatMap(p => JSON.parse(fs.readFileSync(p, 'utf8')))
   const filas = csv(estadoCsv)
   const colab = csv(colabCsv)
   const email = nombre => colab.find(p => norm(p.Nombre) === norm(nombre))?.Correo?.toLowerCase() || null
@@ -232,7 +233,8 @@ export function generar({ lectura, estadoCsv, colabCsv, corte = '2026-10' }) {
       reporte.push({ proyecto: f.Proyecto, resultado: 'CARGA (vacío)', detalle: 'Sin estimaciones: alta vacía con aviso' })
       continue
     }
-    if (origen !== 'libro' || !libro) {
+    const esCliente = origen === 'formato_cliente' && libro?.formato === 'cliente'
+    if ((origen !== 'libro' && !esCliente) || !libro) {
       reporte.push({ proyecto: f.Proyecto, resultado: 'PENDIENTE', detalle: origen === 'formato_cliente' ? 'Falta importador de formato del cliente' : 'Libro no disponible (descarga manual o sin meses)' })
       continue
     }
@@ -244,8 +246,8 @@ export function generar({ lectura, estadoCsv, colabCsv, corte = '2026-10' }) {
     }
     const status = STATUS[f.Estado] || 'Pausado'
     sql.push(`\n-- ${f.Proyecto} · ${libro.archivo.split('/').pop()} · ${mod.estimaciones.map(e => e.hoja).join(' + ')}`)
-    sql.push(sqlProyecto({ ...base, status, rates: mod.rates, origen: 'libro',
-      nota: `Importado de ${libro.archivo.split('/').pop()} (${mod.estimaciones.map(e => `${e.tipo === 'corte' ? 'saldo al corte' : 'estimación'} ${e.hoja}`).join('; ')}). Conciliado al peso contra el Excel.${mod.modo === 'montos' ? ' Montos de conceptos tomados del Excel.' : ''}` }))
+    sql.push(sqlProyecto({ ...base, status, rates: mod.rates, origen: esCliente ? 'formato_cliente' : 'libro', moneda: libro.moneda || 'MXN',
+      nota: `Importado de ${libro.archivo.split('/').pop()}${esCliente ? ' (formato del cliente: CARÁTULA + SOPORTE EST.)' : ''} (${mod.estimaciones.map(e => `${e.tipo === 'corte' ? 'saldo al corte' : 'estimación'} ${e.hoja}`).join('; ')}). Conciliado al peso contra el Excel.${mod.modo === 'montos' ? ' Montos de conceptos tomados del Excel.' : ''}` }))
     sql.push(sqlEstructura(pid, mod))
     sql.push(sqlEstimaciones(pid, mod))
     sql.push(sqlMiembros(pid, miembros))
