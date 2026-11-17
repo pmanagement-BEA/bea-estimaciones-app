@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { projectTotals, projectAdvancePct } from '../utils/calculations'
+import { projectTotals, projectAdvancePct, projectRates } from '../utils/calculations'
 import { toast } from '../components/Toast'
 
 // TODO: migrar renderProjects() del HTML a esta página
@@ -68,8 +68,8 @@ export default function Projects() {
       ) : (
         <div className="project-grid">
           {projects.map(p => {
-            const totals = projectTotals(p.disciplines || [])
-            const advance = projectAdvancePct(p.disciplines || [], p.estimations || [])
+            const totals = projectTotals(p.disciplines || [], projectRates(p))
+            const advance = projectAdvancePct(p.disciplines || [], p.estimations || [], projectRates(p))
             const statusClass = p.status === 'Pausado' ? 'paused' : p.status === 'Cancelado' ? 'cancelled' : ''
             return (
               <div key={p.id} className={`project-card ${statusClass}`} onClick={() => navigate(`/projects/${p.id}/setup`)}>
@@ -88,7 +88,7 @@ export default function Projects() {
                   <div>
                     <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, color: 'var(--text-muted)', fontWeight: 600 }}>Importe Total</div>
                     <div className="project-amount">
-                      {fmtMoney(totals.importeTotal, p.currency)}
+                      {fmtMoney(totals.conDescuento, p.currency)}
                       <span className="project-currency">{p.currency}</span>
                     </div>
                   </div>

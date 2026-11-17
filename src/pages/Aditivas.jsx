@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtDate } from '../utils/format'
+import { incorporarAditivaAlContrato } from '../utils/aditivas'
 
 const STATUS_STYLE = {
   Borrador:    { bg: 'var(--surface-2)',  color: 'var(--text-soft)',  border: 'var(--border-strong)' },
@@ -72,6 +73,11 @@ export default function Aditivas() {
     const { error } = await supabase.from('aditivas').update(updates).eq('id', aditivaId)
     if (error) { toast('Error al cambiar estado', true); return }
     setAditivas(prev => prev.map(a => a.id === aditivaId ? { ...a, ...updates } : a))
+    if (newStatus === 'Aceptada') {
+      const res = await incorporarAditivaAlContrato(id, aditiva, aditiva.aditiva_alcances)
+      if (res.error) { toast('Aceptada, pero no se pudo sumar al contrato', true); return }
+      if (res.added) { toast(`Aditiva aceptada y sumada al contrato (${fmtMoney(res.total, project.currency)}) ✓`); return }
+    }
     toast(`Aditiva → ${newStatus}`)
   }
 
