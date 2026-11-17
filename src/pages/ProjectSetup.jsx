@@ -452,6 +452,17 @@ export default function ProjectSetup() {
         <span className="current">{project.name}</span>
       </div>
 
+      {project.origen_datos === 'sin_estimaciones' && sentCount === 0 && (
+        <div className="readonly-banner" style={{ background: 'var(--warning-soft)', color: 'var(--warning)', borderColor: 'var(--warning)' }}>
+          <span>
+            ⚠ <strong>No se encontraron estimaciones</strong> de este proyecto en Drive, así que se dio de alta
+            sin conceptos ni saldo. Cuando se active o reactive, captura aquí sus disciplinas y conceptos y
+            después registra sus estimaciones desde <strong>Estimación del mes</strong>.
+            {project.nota_migracion ? <><br /><small>{project.nota_migracion}</small></> : null}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
       <div className="page-header">
         <div>
@@ -536,7 +547,7 @@ export default function ProjectSetup() {
           </Field>
           <Field label="Estado">
             <select value={project.status} onChange={e => setProjectField('status', e.target.value)}>
-              {['Activo','Pausado','Cancelado'].map(o => <option key={o}>{o}</option>)}
+              {['Activo','Pausado','Terminado','Cancelado'].map(o => <option key={o}>{o}</option>)}
             </select>
           </Field>
           <Field label="Fecha de inicio de Proyecto">
