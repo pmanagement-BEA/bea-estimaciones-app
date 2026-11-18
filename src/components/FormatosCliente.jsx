@@ -73,6 +73,7 @@ export default function FormatosCliente({ project, conceptos, periodo, puedeAdmi
   async function alSubir(e) {
     const file = e.target.files[0]; e.target.value = ''
     if (!file) return
+    if (/\.xlsb$/i.test(file.name)) { toast('Este archivo es .xlsb (binario). Ábrelo en Excel y usa Guardar como → Libro de Excel habilitado para macros (.xlsm); luego súbelo.', true); return }
     setTrabajando('subir')
     try {
       const bytes = await file.arrayBuffer()
@@ -80,7 +81,7 @@ export default function FormatosCliente({ project, conceptos, periodo, puedeAdmi
       const libro = await motor.abrirXlsx(JSZip, bytes)
       const { detectarFormato } = await cargarMotor()
       const tipo = detectarFormato(libro)
-      if (!tipo) throw new Error('No reconozco este formato. Por ahora la app llena los del Tec de Monterrey y STIVA.')
+      if (!tipo) throw new Error('No reconozco este formato. Por ahora la app llena los del Tec de Monterrey, STIVA, NEMESIS y GAP. Si es .xlsb, ábrelo en Excel y guárdalo como .xlsm o .xlsx.')
       const ruta = await subirArchivo(project.id, file.name, bytes)
       const fase = /constru/i.test(file.name) ? ' · Construcción' : /dise[nñ]o/i.test(file.name) ? ' · Diseño' : ''
       const previo = reemplazar.current
@@ -121,7 +122,7 @@ export default function FormatosCliente({ project, conceptos, periodo, puedeAdmi
           <div style={{ fontWeight: 700, color: 'var(--navy)' }}>Formato del cliente</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
             {formatos.length ? 'Sale la misma estimación en el formato propio del cliente, a partir de la última que se le mandó.'
-              : 'Si el cliente pide su propio formato (Tec, STIVA…), sube aquí la última estimación que se le mandó en ese formato.'}
+              : 'Si el cliente pide su propio formato (Tec, STIVA, NEMESIS, GAP), sube aquí la última estimación que se le mandó en ese formato.'}
           </div>
         </div>
         {puedeAdministrar && (
@@ -129,7 +130,7 @@ export default function FormatosCliente({ project, conceptos, periodo, puedeAdmi
             {trabajando === 'subir' ? 'Subiendo…' : '＋ Agregar formato'}
           </button>
         )}
-        <input ref={fileRef} type="file" accept=".xlsx,.xlsm" style={{ display: 'none' }} onChange={alSubir} />
+        <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xlsb" style={{ display: 'none' }} onChange={alSubir} />
       </div>
 
       {formatos.map(f => (

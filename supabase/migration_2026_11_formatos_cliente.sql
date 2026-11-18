@@ -7,7 +7,7 @@ create table if not exists formatos_cliente (
   id              uuid primary key default gen_random_uuid(),
   project_id      uuid not null references projects(id) on delete cascade,
   nombre          text not null default '',
-  tipo            text not null check (tipo in ('tec','stiva')),
+  tipo            text not null check (tipo in ('tec','stiva','nemesis','gap')),
   archivo         text not null,              -- ruta en el bucket formatos-cliente
   archivo_nombre  text not null default '',
   numero          integer,                    -- número de estimación del cliente en ese archivo

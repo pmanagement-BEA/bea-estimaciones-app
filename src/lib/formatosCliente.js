@@ -2,11 +2,14 @@
 // Formatos que se reconocen solos por sus hojas:
 //   tec   → Tec de Monterrey: 01 CARÁTULA / 02 DESGLOSE WBS / 03 RESUMEN / 04 ESTADO DE CUENTA
 //   stiva → STIVA: CARATULA / ESTIMACION… ("AVANCE ANTERIOR" / "ESTE AVANCE") / EDO DE CTA
+//   nemesis → NEMESIS Proyectos: ESTIMACION TIPO / CUERPO EST - Actualizado / CUERPO EST - Anterior
+//   gap   → GAP (aeropuertos): Ficha / Estimación - Volúmenes (meses por partida) / Resumen de Partidas…
+//           GAP no cobra por concepto: se cobra 1 mes por partida que tuvo avance en el mes.
 // En ambos, cada concepto tiene precio unitario, cantidad anterior y cantidad de esta estimación.
 // Se mueve "esta" a "anterior", se pone la cantidad nueva, se sube el número y se cambia el periodo.
 import { abrirXlsx, colLetra, moverFormula } from './xlsxCeldas.js'
 
-export const NOMBRE_FORMATO = { tec: 'Tec de Monterrey', stiva: 'STIVA' }
+export const NOMBRE_FORMATO = { tec: 'Tec de Monterrey', stiva: 'STIVA', nemesis: 'NEMESIS', gap: 'GAP' }
 
 const n = v => (typeof v === 'number' ? v : Number(String(v ?? '').replace(/[$,\s]/g, '')) || 0)
 const normClave = k => { const s = String(k ?? '').trim().replace(',', '.'); const x = Number(s); return s && !isNaN(x) ? x.toFixed(2) : s.toUpperCase() }
@@ -15,6 +18,8 @@ const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', '
 
 export function detectarFormato(libro) {
   if (libro.hoja('02 DESGLOSE WBS') && libro.hoja('01 CARÁTULA')) return 'tec'
+  if (libro.hoja('CUERPO EST - Actualizado') && libro.hoja('ESTIMACION TIPO')) return 'nemesis'
+  if (libro.hoja('Estimación - Volúmenes') && libro.hoja('Ficha')) return 'gap'
   if (libro.hoja(/^ESTIMACI[OÓ]N/i) && libro.hoja(/^CAR[AÁ]TULA/i)) return 'stiva'
   return null
 }
@@ -70,6 +75,18 @@ function renglonesStiva(libro) {
   return [out]
 }
 
+function renglonesNemesis(libro) {
+  // CUERPO EST: F = P.U., P = cantidad del contrato actualizado, R = acumulado anterior, T = esta estimación
+  const h = libro.hoja('CUERPO EST - Actualizado')
+  const out = []
+  for (const r of [...h.filas.keys()].sort((a, b) => a - b)) {
+    if (r <= 23) continue
+    const pu = n(h.valor('F' + r)), cant = n(h.valor('P' + r))
+    if (pu > 0 && cant > 0 && typeof h.valor('C' + r) === 'string') out.push({ hoja: h, r, pu, cant, colAnt: 'R', colEsta: 'T', clave: null, descripcion: h.valor('C' + r) })
+  }
+  return out
+}
+
 /**
  * plantilla: ArrayBuffer del último Excel que se le mandó al cliente
  * conceptos: [{ clave, disciplina (orden), monto, anterior (fracción cobrada antes), esta (fracción de este mes) }]
@@ -79,7 +96,8 @@ function renglonesStiva(libro) {
 export async function generarFormatoCliente(JSZip, plantilla, conceptos, periodo) {
   const libro = await abrirXlsx(JSZip, plantilla)
   const tipo = detectarFormato(libro)
-  if (!tipo) throw new Error('No reconozco este formato. Por ahora: Tec de Monterrey y STIVA.')
+  if (!tipo) throw new Error('No reconozco este formato. Por ahora: Tec de Monterrey, STIVA, NEMESIS y GAP.')
+  if (tipo === 'gap') return generarGap(libro, conceptos, periodo)
 
   // 1. Empatar renglones del archivo con conceptos de la app
   const usados = new Set()
@@ -95,6 +113,16 @@ export async function generarFormatoCliente(JSZip, plantilla, conceptos, periodo
         if (w) { usados.add(w); pares.push([c, w]) }
       }
     })
+  } else if (tipo === 'nemesis') {
+    // Mismo orden que la app; se empata por importe del contrato actualizado (P.U. × cantidad)
+    const filas = renglonesNemesis(libro)
+    for (const c of conMonto) {
+      const w = filas.find(x => !usados.has(x) && Math.abs(x.pu * x.cant - c.monto) < 1)
+      if (w) { usados.add(w); pares.push([c, w]) }
+    }
+    // La hoja "Anterior" queda como estaba la "Actualizado" antes de esta estimación
+    const act = libro.hoja('CUERPO EST - Actualizado'), ant = libro.hoja('CUERPO EST - Anterior')
+    if (ant) { ant.filas = new Map([...act.filas].map(([r, f]) => [r, { attrs: f.attrs, celdas: new Map(f.celdas) }])); ant.modificada = true }
   } else {
     const [filas] = renglonesStiva(libro)
     for (const c of conMonto) {
@@ -130,7 +158,15 @@ export async function generarFormatoCliente(JSZip, plantilla, conceptos, periodo
   const [y2, m2, d2] = periodo.to.split('-').map(Number)
   const dd = (d, m, y) => `${String(d).padStart(2, '0')}/${String(m).padStart(2, '0')}/${String(y).slice(-2)}`
   let numero
-  if (tipo === 'tec') {
+  const fechaSerial = (y, m, d) => Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000)
+  if (tipo === 'nemesis') {
+    const et = libro.hoja('ESTIMACION TIPO')
+    numero = n(et.valor('I14')) + 1
+    et.escribir('I14', numero)
+    et.escribir('N14', fechaSerial(y2, m2, d2))  // estimación formulada el
+    et.escribir('N15', fechaSerial(y1, m1, d1))  // periodo de ejecución
+    et.escribir('P15', fechaSerial(y2, m2, d2))
+  } else if (tipo === 'tec') {
     const car = libro.hoja('01 CARÁTULA')
     numero = n(car.valor('D11')) + 1
     car.escribir('D11', numero)
@@ -152,9 +188,8 @@ export async function generarFormatoCliente(JSZip, plantilla, conceptos, periodo
     const refNum = junto(car, /^ESTIMACI[OÓ]N\s*No\.?/i)
     numero = n(car.valor(refNum)) + 1
     car.escribir(refNum, numero)
-    const refDe = junto(car, /^DE:?$/i), refA = junto(car, /^A:?$/i)
-    const comoTexto = typeof car.valor(refDe) === 'string'
-    const fechaSerial = (y, m, d) => Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000)
+    const refDe = junto(car, /^(PERIODO\s+)?DE:?$/i), refA = junto(car, /^(A|AL):?$/i)
+    const comoTexto = refDe ? typeof car.valor(refDe) === 'string' : false
     const fechaTexto = (y, m, d) => `${String(d).padStart(2, '0')} de ${MESES[m - 1]} de ${y}`
     if (refDe) car.escribir(refDe, comoTexto ? fechaTexto(y1, m1, d1) : fechaSerial(y1, m1, d1))
     if (refA) car.escribir(refA, comoTexto ? fechaTexto(y2, m2, d2) : fechaSerial(y2, m2, d2))
@@ -197,4 +232,46 @@ export async function generarFormatoCliente(JSZip, plantilla, conceptos, periodo
 
   const buffer = await libro.guardar()
   return { buffer, tipo, numero, total, sinRenglon, diferencias, renglones: pares.length }
+}
+
+// ── GAP: meses por partida ───────────────────────────────────────────────────
+async function generarGap(libro, conceptos, periodo) {
+  const vol = libro.hoja('Estimación - Volúmenes'), ficha = libro.hoja('Ficha')
+  const partidas = []
+  for (const r of [...vol.filas.keys()].sort((a, b) => a - b)) {
+    const wbs = String(vol.valor('B' + r) ?? '').trim()
+    const pu = n(vol.valor('N' + r)), meses = n(vol.valor('H' + r))
+    if (/^\d+\.\d+$/.test(wbs) && pu > 0 && meses > 0) partidas.push({ r, wbs, pu, meses, descripcion: vol.valor('D' + r) })
+  }
+  // Disciplinas de la app (con monto) en orden ↔ partidas de GAP (por importe total, si no por orden)
+  const discs = new Map()
+  for (const c of conceptos.filter(c => c.monto > 0)) {
+    const d = discs.get(c.disciplina) || { monto: 0, esta: 0 }
+    d.monto += c.monto; d.esta += c.monto * (c.esta || 0); discs.set(c.disciplina, d)
+  }
+  const lista = [...discs.entries()].sort((a, b) => a[0] - b[0]).map(([, d]) => d)
+  const usados = new Set(); const pares = []
+  for (const d of lista) {
+    const w = partidas.find(p => !usados.has(p) && Math.abs(p.pu * p.meses - d.monto) < 1) || partidas.find(p => !usados.has(p))
+    if (w) { usados.add(w); pares.push([d, w]) }
+  }
+  let total = 0
+  const diferencias = []
+  for (const [d, w] of pares) {
+    if (Math.abs(w.pu * w.meses - d.monto) >= 1) diferencias.push({ clave: w.wbs, descripcion: w.descripcion, archivo: w.pu * w.meses, app: Math.round(d.monto * 100) / 100 })
+    const ant = n(vol.valor('J' + w.r)) + n(vol.valor('K' + w.r))
+    const esta = d.esta > 0.005 ? Math.min(1, Math.max(0, w.meses - ant)) : 0
+    vol.escribir('J' + w.r, redondea(ant))
+    vol.escribir('K' + w.r, esta)
+    total += esta * w.pu
+  }
+  const actual = String(ficha.valor('F36') ?? '')
+  const numero = (Number((actual.match(/\d+/) || ['0'])[0]) || 0) + 1
+  ficha.escribir('F36', `No. ${String(numero).padStart(2, '0')}`)
+  const serial = t => { const [y, m, dd] = t.split('-').map(Number); return Math.round((Date.UTC(y, m - 1, dd) - Date.UTC(1899, 11, 30)) / 86400000) }
+  ficha.escribir('F37', serial(periodo.to))   // fecha de la estimación
+  ficha.escribir('G38', serial(periodo.from)) // periodo de ejecución de esta estimación (del…
+  ficha.escribir('K38', serial(periodo.to))   // …al)
+  const buffer = await libro.guardar()
+  return { buffer, tipo: 'gap', numero, total, sinRenglon: [], diferencias, renglones: pares.length }
 }
