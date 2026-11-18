@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { estimationSummary, projectRates } from '../utils/calculations'
+import { estimationSummary, projectRates, AREAS } from '../utils/calculations'
+import { fetchEstadoAreasMuchas } from '../lib/cierre'
+import { fechaCorte, corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte } from '../utils/cierre'
 import { toast } from '../components/Toast'
 import { fetchMyAssignments } from '../lib/directorio'
 
@@ -17,6 +19,7 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState('Activo')
   const [mine, setMine] = useState({}) // { project_id: [rol] }
   const [onlyMine, setOnlyMine] = useState(true)
+  const [estadoAreas, setEstadoAreas] = useState({}) // { estimation_id: { area: fila } }
 
   const isCoord = profile?.role === 'coordinador'
 
@@ -38,6 +41,8 @@ export default function Dashboard() {
     if (projRes.error) { toast('Error al cargar', true); setLoading(false); return }
     setProjects(projRes.data || [])
     setAditivas(aditRes.data || [])
+    const borradores = (projRes.data || []).flatMap(p => (p.estimations || []).filter(e => e.status === 'Borrador').map(e => e.id))
+    setEstadoAreas(await fetchEstadoAreasMuchas(borradores))
     setLoading(false)
   }
 
@@ -127,6 +132,19 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Corte del mes en curso */}
+      {(() => {
+        const hoy = new Date()
+        const corte = fechaCorte(hoy.getFullYear(), hoy.getMonth())
+        const tarde = diasParaCorte(corte) < 0
+        return (
+          <div className="card mb-md" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, borderLeft: `4px solid ${tarde ? 'var(--danger)' : 'var(--green)'}`, padding: '10px 16px' }}>
+            <span style={{ fontSize: 13 }}><strong>Corte de estimaciones:</strong> {fmtCorte(corte)} · {textoCorte(corte)}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Columna "Cierre": ✓ área lista · ⏳ pendiente</span>
+          </div>
+        )
+      })()}
+
       {/* Filtro estado */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         {['Activo', 'Pausado', 'Terminado', 'Cancelado', 'Todos'].map(s => (
@@ -155,6 +173,7 @@ export default function Dashboard() {
                 <th className="num" style={{ width: 130 }}>Acumulado</th>
                 <th className="num" style={{ width: 130 }}>Por Facturar</th>
                 <th style={{ width: 130 }}>Última Est.</th>
+                <th style={{ width: 120 }}>Cierre</th>
                 <th style={{ width: 80, textAlign: 'center' }}>Aditivas</th>
                 <th style={{ width: 160 }} className="no-print">Acciones</th>
               </tr>
@@ -212,6 +231,27 @@ export default function Dashboard() {
                             </div>
                           </>
                         : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td style={{ fontSize: 11 }}>
+                      {(() => {
+                        const borrador = (p.estimations || []).find(e => e.status === 'Borrador')
+                        const aplican = AREAS.filter(a => sum.areaAvance[a])
+                        if (!borrador || !aplican.length) return <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        const st = estadoAreas[borrador.id] || {}
+                        const corto = { 'Consultoría': 'CV', 'Commissioning': 'CX', 'Modelación': 'ME' }
+                        const tarde = diasParaCorte(corteDeEstimacion(borrador.period_from)) < 0
+                        return (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} title={aplican.map(a => `${a}: ${st[a] ? 'lista' : 'pendiente'}`).join('\n')}>
+                            {aplican.map(a => (
+                              <span key={a} style={{ padding: '1px 6px', borderRadius: 99, fontWeight: 700,
+                                background: st[a] ? 'var(--green-soft)' : tarde ? 'var(--danger-soft)' : 'var(--warning-soft)',
+                                color: st[a] ? 'var(--green-dark)' : tarde ? 'var(--danger)' : 'var(--warning)' }}>
+                                {corto[a]} {st[a] ? '✓' : '⏳'}
+                              </span>
+                            ))}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td style={{ textAlign: 'center' }}>
                       {projAds.length === 0
