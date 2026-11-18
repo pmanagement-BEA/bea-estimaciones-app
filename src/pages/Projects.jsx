@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { projectTotals, projectAdvancePct, projectRates } from '../utils/calculations'
+import { projectTotals, projectAdvancePct, projectRates, projectPhase } from '../utils/calculations'
 import { toast } from '../components/Toast'
 import { fetchMyAssignments, TEAM_ROLE_LABEL } from '../lib/directorio'
 
@@ -107,8 +107,11 @@ export default function Projects() {
                     ))}
                   </div>
                 )}
-                <div className="project-meta">{p.client} · {p.location || '—'}</div>
-                <div className="project-meta">{p.service_type} · Fase: {p.phase}</div>
+                <div className="project-meta">{[p.client, p.location].filter(Boolean).join(' · ') || '—'}</div>
+                <div className="project-meta">
+                  {p.service_type}
+                  {(() => { const f = projectPhase(p.disciplines || [], p.estimations || [], projectRates(p)); return f ? ` · Fase: ${f}` : '' })()}
+                </div>
                 <div style={{ marginTop: 6 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
                     <span>Avance global</span>

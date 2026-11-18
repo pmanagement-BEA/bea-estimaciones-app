@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
-import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS } from '../utils/calculations'
+import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS, projectPhase } from '../utils/calculations'
 import { nextNumber } from '../utils/aditivas'
 import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
 import { useAuth } from '../hooks/useAuth'
@@ -62,7 +62,6 @@ const SERVICE_TYPES = [
   'Comisionamiento', 'NOM-020-ENER / Eficiencia energética', 'Manual de lineamientos LEED', 'Mixto',
   'LEED BD+C', 'LEED ID+C', 'LEED O+M', 'EDGE',
 ]
-const PHASE_OPTIONS = ['Diseño','Construcción','Ocupación']
 const TEAM_ROLES = [
   ['lider','Líder de Proyecto'],
   ['cx','Agente de Comisionamiento (CX)'],
@@ -552,10 +551,10 @@ export default function ProjectSetup() {
                 .map(o => <option key={o}>{o}</option>)}
             </select>
           </Field>
-          <Field label="Fase actual del Proyecto">
-            <select value={project.phase} onChange={e => setProjectField('phase', e.target.value)}>
-              {PHASE_OPTIONS.map(o => <option key={o}>{o}</option>)}
-            </select>
+          <Field label="Fase actual (según estimaciones)">
+            <div style={{ padding: '8px 0', fontSize: 13, color: 'var(--navy)' }}>
+              {projectPhase(disciplines, estimations, projectRates(project)) || 'No aplica'}
+            </div>
           </Field>
           <Field label="Estado">
             <select value={project.status} onChange={e => setProjectField('status', e.target.value)}>
