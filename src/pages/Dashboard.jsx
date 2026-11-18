@@ -5,19 +5,25 @@ import { useAuth } from '../hooks/useAuth'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { estimationSummary, projectRates } from '../utils/calculations'
 import { toast } from '../components/Toast'
+import { fetchMyAssignments } from '../lib/directorio'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const { profile } = useAuth()
 
-  const [projects, setProjects]   = useState([])
+  const [allProjects, setProjects] = useState([])
   const [aditivas, setAditivas]   = useState([])
   const [loading, setLoading]     = useState(true)
   const [statusFilter, setStatusFilter] = useState('Activo')
+  const [mine, setMine] = useState({}) // { project_id: [rol] }
+  const [onlyMine, setOnlyMine] = useState(true)
 
   const isCoord = profile?.role === 'coordinador'
 
   useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    if (profile?.email) fetchMyAssignments(profile.email).then(setMine)
+  }, [profile?.email])
 
   async function fetchAll() {
     setLoading(true)
@@ -37,6 +43,11 @@ export default function Dashboard() {
 
   if (loading) return <div className="main"><div className="spinner" /></div>
 
+  // ── Qué proyectos ve: el coordinador puede ver todos, pero por defecto solo los suyos
+  //    (igual que en Mis Proyectos). Los KPIs se calculan sobre lo que se ve.
+  const verTodos = isCoord && !onlyMine
+  const projects = verTodos ? allProjects : allProjects.filter(p => mine[p.id] || p.user_id === profile?.id)
+
   // ── Filtrado por estado ───────────────────────────────────────────────────
   const filtered = statusFilter === 'Todos'
     ? projects
@@ -52,8 +63,9 @@ export default function Dashboard() {
     totalAcumulado += sum.acumGlobal
   })
 
+  const idsVisibles = new Set(projects.map(p => p.id))
   const aditivasPendientes = aditivas.filter(a =>
-    ['Enviada', 'Negociacion'].includes(a.status)
+    idsVisibles.has(a.project_id) && ['Enviada', 'Negociacion'].includes(a.status)
   ).length
 
   // Currency más común (para KPIs globales)
@@ -67,16 +79,24 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">
-            {isCoord ? 'Dashboard ' : 'Mi '}
-            <span className="accent">{isCoord ? 'Global' : 'Dashboard'}</span>
+            {verTodos ? 'Dashboard ' : 'Mi '}
+            <span className="accent">{verTodos ? 'Global' : 'Dashboard'}</span>
           </h1>
           <div className="page-subtitle">
-            {isCoord
+            {verTodos
               ? `Resumen de todos los proyectos · ${projects.length} en total`
               : `Resumen de tus proyectos · ${projects.length} asignados`}
           </div>
         </div>
-        <button className="btn btn-outline" onClick={() => navigate('/')}>← Mis Proyectos</button>
+        <div className="flex" style={{ gap: 8, alignItems: 'center' }}>
+          {isCoord && (
+            <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />
+              Solo donde estoy asignado
+            </label>
+          )}
+          <button className="btn btn-outline" onClick={() => navigate('/')}>← Mis Proyectos</button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -149,7 +169,7 @@ export default function Dashboard() {
 
                 // Última estimación enviada
                 const enviadas = (p.estimations || []).filter(e => e.status === 'Enviada')
-                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                  .sort((a, b) => b.number - a.number)
                 const lastEst = enviadas[0]
 
                 // Aditivas de este proyecto
@@ -166,7 +186,7 @@ export default function Dashboard() {
                       </div>
                     </td>
                     <td>
-                      <span className={`state-badge state-${p.status}`}>{p.status}</span>
+                      <span className={`state-badge state-${p.status}`} style={{ position: 'static' }}>{p.status}</span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -188,7 +208,7 @@ export default function Dashboard() {
                         ? <>
                             <div style={{ fontWeight: 600 }}>#{String(lastEst.number).padStart(3,'0')}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                              {fmtDate((lastEst.created_at || '').slice(0,10))}
+                              {fmtDate(lastEst.period_to || (lastEst.created_at || '').slice(0,10))}
                             </div>
                           </>
                         : <span style={{ color: 'var(--text-muted)' }}>—</span>}
