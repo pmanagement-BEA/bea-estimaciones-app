@@ -170,3 +170,16 @@ export function estimationSummary(disciplines, estimations, currentEstimationId,
 export function projectAdvancePct(disciplines, estimations, rates = LEGACY_RATES) {
   return estimationSummary(disciplines, estimations, null, null, rates).advanceGlobal
 }
+
+/**
+ * Fase del proyecto según sus estimaciones: si alguna disciplina de construcción
+ * ("Fase Tres: … Construcción", "Fundamental Commissioning (Fase de Construcción)"…)
+ * ya tiene avance cobrado, va en Construcción; si no, en Diseño.
+ * Proyectos sin disciplinas de construcción (O+M, EDGE existentes, modelación…) → null.
+ */
+export function projectPhase(disciplines = [], estimations = [], rates = LEGACY_RATES) {
+  const deConstruccion = disciplines.filter(d => /construcci/i.test(d.name || ''))
+  if (!deConstruccion.length) return null
+  const { byDiscipline } = estimationSummary(disciplines, estimations, null, null, rates)
+  return deConstruccion.some(d => (byDiscipline[d.id]?.acumulado || 0) > 0.5) ? 'Construcción' : 'Diseño'
+}
