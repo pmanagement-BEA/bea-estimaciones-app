@@ -70,6 +70,10 @@ export default function Estimation() {
   const togglFileRef    = useRef(null)
 
   useEffect(() => { fetchAll() }, [id, estId])
+  // Permisos por área: se calculan cuando ya cargaron el proyecto y el perfil (el perfil llega después del primer render)
+  useEffect(() => {
+    if (project?.id && profile?.id) permisosProyecto(project, profile).then(setPerms)
+  }, [project?.id, profile?.id, profile?.role])
 
   // ── Carga ──────────────────────────────────────────────────────────────────
   async function fetchAll() {
@@ -127,10 +131,9 @@ export default function Estimation() {
     setReportData(rd)
     reportRef.current = rd
 
-    const [estado, permisos] = await Promise.all([fetchEstadoAreas(est.id), permisosProyecto(projRes.data, profile)])
+    const estado = await fetchEstadoAreas(est.id)
     areaStatusRef.current = estado
     setAreaStatus(estado)
-    setPerms(permisos)
 
     setProject(projRes.data)
     setDisciplines(discs)
