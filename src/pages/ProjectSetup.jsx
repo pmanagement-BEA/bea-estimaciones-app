@@ -50,7 +50,18 @@ function parseEstimacionCSV(text) {
 }
 
 // ── Listas de opciones ──────────────────────────────────────────────────────
-const SERVICE_TYPES = ['LEED BD+C','LEED ID+C','LEED O+M','EDGE','Comisionamiento','Modelación Energética','Mixto']
+// Tipos de servicio según la clave del proyecto (ver migracion/CLAVES_DE_PROYECTO.md).
+// Los genéricos ('LEED BD+C', 'EDGE'…) se conservan para proyectos que aún no tienen subtipo.
+const SERVICE_TYPES = [
+  'LEED BD+C: New Construction', 'LEED BD+C: Core & Shell', 'LEED BD+C: Warehouses & Distribution Centers',
+  'LEED BD+C: Retail', 'LEED BD+C: Hospitality', 'LEED BD+C: Healthcare', 'LEED ID+C: Commercial Interiors',
+  'LEED O+M: Existing Buildings', 'LEED O+M: Recertificación',
+  'EDGE: Diseño', 'EDGE: Edificios existentes',
+  'WELL', 'WELL for Residential',
+  'Modelación Energética', 'Modelación + Auditoría Energética', 'Modelación + Commissioning',
+  'Comisionamiento', 'NOM-020-ENER / Eficiencia energética', 'Manual de lineamientos LEED', 'Mixto',
+  'LEED BD+C', 'LEED ID+C', 'LEED O+M', 'EDGE',
+]
 const PHASE_OPTIONS = ['Diseño','Construcción','Ocupación']
 const TEAM_ROLES = [
   ['lider','Líder de Proyecto'],
@@ -537,7 +548,8 @@ export default function ProjectSetup() {
           </Field>
           <Field label="Tipo de servicio">
             <select value={project.service_type} onChange={e => setProjectField('service_type', e.target.value)}>
-              {SERVICE_TYPES.map(o => <option key={o}>{o}</option>)}
+              {(SERVICE_TYPES.includes(project.service_type) ? SERVICE_TYPES : [project.service_type, ...SERVICE_TYPES])
+                .map(o => <option key={o}>{o}</option>)}
             </select>
           </Field>
           <Field label="Fase actual del Proyecto">
