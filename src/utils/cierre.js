@@ -59,3 +59,15 @@ export function textoCorte(corte, hoy = new Date()) {
   if (n === 0) return 'hoy es el corte'
   return `venció hace ${-n} día${n === -1 ? '' : 's'}`
 }
+
+/**
+ * Mes del borrador: el mes en turno (puede haber meses sin estimar), salvo que ese
+ * mes ya tenga una estimación enviada; entonces el siguiente. Devuelve { period_from, period_to }.
+ */
+export function periodoBorrador(estimaciones = [], hoy = new Date()) {
+  let y = hoy.getFullYear(), m = hoy.getMonth()
+  const enviados = new Set(estimaciones.filter(e => e.status === 'Enviada' && e.period_from).map(e => e.period_from.slice(0, 7)))
+  while (enviados.has(`${y}-${pad(m + 1)}`)) { m++; if (m > 11) { m = 0; y++ } }
+  const ultimo = new Date(y, m + 1, 0).getDate()
+  return { period_from: `${y}-${pad(m + 1)}-01`, period_to: `${y}-${pad(m + 1)}-${pad(ultimo)}` }
+}

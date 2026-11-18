@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS, disciplineArea } from '../utils/calculations'
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
-import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte } from '../utils/cierre'
+import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
@@ -90,14 +90,17 @@ export default function Estimation() {
     const allEsts = allEstRes.data || []
     if (estId === 'current') {
       est = allEsts.find(e => e.status === 'Borrador')
+      const periodo = periodoBorrador(allEsts)
+      const mesYaEnviado = est && allEsts.some(e => e.status === 'Enviada' && (e.period_from || '').slice(0, 7) === (est.period_from || '').slice(0, 7))
+      if (mesYaEnviado) {
+        // El borrador quedó en un mes que ya se envió: pasa al mes en turno (si el líder eligió otro mes a mano, se respeta)
+        await supabase.from('estimations').update(periodo).eq('id', est.id)
+        est = { ...est, ...periodo }
+      }
       if (!est) {
-        // Crear borrador
-        const now = new Date()
-        const y = now.getFullYear(), m = now.getMonth()
-        const pad = n => String(n).padStart(2, '0')
-        const lastDay = new Date(y, m + 1, 0).getDate()
+        // Crear borrador del mes en turno
         const { data, error } = await supabase.from('estimations')
-          .insert({ project_id: id, number: nextNumber(allEsts), status: 'Borrador', period_from: `${y}-${pad(m+1)}-01`, period_to: `${y}-${pad(m+1)}-${pad(lastDay)}` })
+          .insert({ project_id: id, number: nextNumber(allEsts), status: 'Borrador', ...periodo })
           .select().single()
         if (error) { toast('Error al crear estimación', true); setLoading(false); return }
         est = { ...data, estimation_items: [] }
