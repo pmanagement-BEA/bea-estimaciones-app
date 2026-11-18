@@ -23,7 +23,9 @@ export default function Directorio() {
   const [paste, setPaste] = useState('')
   const [preview, setPreview] = useState(null)
   const [cuentas, setCuentas] = useState({})
-  const [clave, setClave] = useState(null) // { email, valor, lista }
+  // Contraseñas temporales asignadas una por una: { [email]: { valor, lista } }.
+  // Se quedan todas visibles hasta que el coordinador da "Listo" o sale de la pantalla.
+  const [claves, setClaves] = useState({})
   const [masivo, setMasivo] = useState(null) // { hechos, total, resultados }
 
   useEffect(() => { load() }, [profile?.role])
@@ -37,10 +39,13 @@ export default function Directorio() {
     setLoading(false)
   }
 
-  async function guardarClave() {
-    const { resultado, error } = await asignarContrasenaTemporal(clave.email, clave.valor)
+  const ponerClave = (email, cambios) => setClaves(cs => ({ ...cs, [email]: { ...cs[email], ...cambios } }))
+  const quitarClave = email => setClaves(({ [email]: _, ...resto }) => resto)
+
+  async function guardarClave(email) {
+    const { resultado, error } = await asignarContrasenaTemporal(email, claves[email].valor)
     if (error) { toast('No se pudo: ' + error.message, true); return }
-    setClave({ ...clave, lista: true })
+    ponerClave(email, { lista: true })
     toast(resultado === 'creada' ? 'Cuenta creada ✓' : 'Contraseña temporal asignada ✓')
     setCuentas(await fetchCuentas())
   }
@@ -282,20 +287,22 @@ export default function Directorio() {
                   </td>
                   {isCoord && (() => {
                     const c = cuentas[r.email]
-                    if (clave?.email === r.email) return (
+                    const clave = claves[r.email]
+                    if (clave) return (
                       <td style={{ minWidth: 230 }}>
                         {clave.lista ? (
                           <div style={{ fontSize: 12 }}>
                             Dale esta contraseña temporal a {r.nombre.split(' ')[0]}:<br />
                             <strong style={{ fontFamily: 'monospace', fontSize: 14 }}>{clave.valor}</strong><br />
                             <span style={{ color: 'var(--text-muted)' }}>Al entrar, la app le pedirá crear la suya.</span>{' '}
-                            <a onClick={() => setClave(null)} style={{ cursor: 'pointer' }}>Listo</a>
+                            <a onClick={() => copiar(mensajeBienvenida({ nombre: r.nombre, email: r.email, clave: clave.valor }), 'Mensaje')} style={{ cursor: 'pointer' }}>Copiar mensaje</a>{' · '}
+                            <a onClick={() => { if (window.confirm('¿Ya guardaste o mandaste esta contraseña? Al quitarla ya no se podrá ver.')) quitarClave(r.email) }} style={{ cursor: 'pointer' }}>Listo</a>
                           </div>
                         ) : (
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <input value={clave.valor} onChange={e => setClave({ ...clave, valor: e.target.value })} style={{ fontFamily: 'monospace', width: 130 }} />
-                            <button className="btn btn-sm btn-primary" onClick={guardarClave}>Asignar</button>
-                            <button className="btn btn-sm btn-outline" onClick={() => setClave(null)}>✕</button>
+                            <input value={clave.valor} onChange={e => ponerClave(r.email, { valor: e.target.value })} style={{ fontFamily: 'monospace', width: 130 }} />
+                            <button className="btn btn-sm btn-primary" onClick={() => guardarClave(r.email)}>Asignar</button>
+                            <button className="btn btn-sm btn-outline" onClick={() => quitarClave(r.email)}>✕</button>
                           </div>
                         )}
                       </td>
@@ -305,7 +312,7 @@ export default function Directorio() {
                         {!c?.tiene_cuenta ? <span style={{ color: 'var(--text-muted)' }}>Sin cuenta</span>
                           : c.debe_cambiar ? <span style={{ color: 'var(--warning)' }}>Temporal pendiente</span>
                           : <span style={{ color: 'var(--green-dark)' }}>Activa{c.ultimo_acceso ? ` · ${new Date(c.ultimo_acceso).toLocaleDateString('es-MX')}` : ''}</span>}{' '}
-                        {r.activo && <button className="btn btn-sm btn-outline" style={{ marginLeft: 6 }} onClick={() => setClave({ email: r.email, valor: generarTemporal(), lista: false })}>
+                        {r.activo && <button className="btn btn-sm btn-outline" style={{ marginLeft: 6 }} onClick={() => ponerClave(r.email, { valor: generarTemporal(), lista: false })}>
                           🔑 {c?.tiene_cuenta ? 'Restablecer' : 'Crear cuenta'}
                         </button>}
                       </td>
