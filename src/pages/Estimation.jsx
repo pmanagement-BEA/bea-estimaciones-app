@@ -8,6 +8,7 @@ import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, proje
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
 import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
+import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole } from '../lib/directorio'
@@ -64,6 +65,7 @@ export default function Estimation() {
   const [areaStatus, setAreaStatus]   = useState({}) // { area: { listo_por, listo_nombre, listo_at } }
   const [perms, setPerms]             = useState({ todo: false, areas: new Set() })
   const areaStatusRef   = useRef({})
+  const conceptosClienteRef = useRef([])
   const saveTimer       = useRef(null)
   const reportSaveTimer = useRef(null)
   const reportRef       = useRef(null)
@@ -211,6 +213,9 @@ export default function Estimation() {
     if (error) { toast('Error al marcar como enviada', true); return }
     setEstimation(prev => ({ ...prev, status: 'Enviada' }))
     toast('Estimación marcada como Enviada ✓')
+    // La estimación en formato del cliente queda como plantilla del mes siguiente
+    const errores = await avanzarFormatos(project, conceptosClienteRef.current, { from: estimation.period_from, to: estimation.period_to })
+    if (errores.length) toast('No se actualizó el formato del cliente: ' + errores.join(' · '), true)
   }
 
   // ── Report helpers ─────────────────────────────────────────────────────────
@@ -378,6 +383,15 @@ export default function Estimation() {
   const puedeMarcar = a => !readonly && (perms.todo || perms.areas.has(a))
   const puedeEditar = d => !readonly && (perms.todo || perms.areas.has(disciplineArea(d)))
   const hoja = armarHoja({ project, estimation, disciplines, items, summary, rates })
+  // Conceptos para llenar el formato propio del cliente (Tec, STIVA…)
+  const conceptosCliente = disciplines.flatMap(d => (d.concepts || []).map(c => {
+    const monto = amountOf(c, d)
+    return { clave: c.key, disciplina: d.sort_order, monto,
+      anterior: monto > 0 ? (acumMap[c.id] || 0) / monto : 0,
+      esta: monto > 0 ? thisEstAmount(items[c.id], c, d) / monto : 0 }
+  }))
+  const periodo = { from: estimation.period_from, to: estimation.period_to }
+  conceptosClienteRef.current = conceptosCliente
 
   async function toggleArea(a) {
     if (areaStatus[a]) {
@@ -811,6 +825,7 @@ export default function Estimation() {
               )}
             </div>
           </div>
+          <FormatosCliente project={project} conceptos={conceptosCliente} periodo={periodo} puedeAdministrar={perms.todo && !soloLectura} />
           <HojaCliente hoja={hoja} />
         </div>
       )}
