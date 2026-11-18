@@ -4,7 +4,10 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
-import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS } from '../utils/calculations'
+import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS, disciplineArea } from '../utils/calculations'
+import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
+import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte } from '../utils/cierre'
+import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole } from '../lib/directorio'
@@ -58,6 +61,9 @@ export default function Estimation() {
   const [reportData, setReportData]   = useState(null)
   const [reportSaving, setReportSaving] = useState(false)
   const [togglModal, setTogglModal]   = useState(null) // { rows: [] }
+  const [areaStatus, setAreaStatus]   = useState({}) // { area: { listo_por, listo_nombre, listo_at } }
+  const [perms, setPerms]             = useState({ todo: false, areas: new Set() })
+  const areaStatusRef   = useRef({})
   const saveTimer       = useRef(null)
   const reportSaveTimer = useRef(null)
   const reportRef       = useRef(null)
@@ -118,6 +124,11 @@ export default function Estimation() {
     setReportData(rd)
     reportRef.current = rd
 
+    const [estado, permisos] = await Promise.all([fetchEstadoAreas(est.id), permisosProyecto(projRes.data, profile)])
+    areaStatusRef.current = estado
+    setAreaStatus(estado)
+    setPerms(permisos)
+
     setProject(projRes.data)
     setDisciplines(discs)
     setAllEstimations(allEsts)
@@ -144,6 +155,16 @@ export default function Estimation() {
 
     const itemWithAmount = { ...updatedItem, amount }
     setItems(prev => ({ ...prev, [conceptId]: itemWithAmount }))
+
+    // Si el área ya estaba marcada como lista, un cambio la regresa a pendiente
+    const area = disciplineArea(disc)
+    if (area && areaStatusRef.current[area]) {
+      const { [area]: _, ...resto } = areaStatusRef.current
+      areaStatusRef.current = resto
+      setAreaStatus(resto)
+      quitarAreaLista(estimation.id, area)
+      toast(`${area} vuelve a pendiente porque cambiaste su avance`)
+    }
 
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => upsertItem(estimation.id, conceptId, itemWithAmount), 500)
@@ -343,6 +364,31 @@ export default function Estimation() {
       : (bd?.avance || 0)
   })
 
+  // ── Cierre del mes por área ────────────────────────────────────────────────
+  const areasAplican = AREAS.filter(a => summary.areaAvance[a])
+  const areasPendientes = areasAplican.filter(a => !areaStatus[a])
+  const todasListas = areasAplican.length > 0 && areasPendientes.length === 0
+  const corte = corteDeEstimacion(estimation.period_from)
+  const puedeMarcar = a => !readonly && (perms.todo || perms.areas.has(a))
+  const puedeEditar = d => !readonly && (perms.todo || perms.areas.has(disciplineArea(d)))
+  const hoja = armarHoja({ project, estimation, disciplines, items, summary, rates })
+
+  async function toggleArea(a) {
+    if (areaStatus[a]) {
+      const { error } = await quitarAreaLista(estimation.id, a)
+      if (error) { toast('No se pudo: ' + error.message, true); return }
+      const { [a]: _, ...resto } = areaStatus
+      areaStatusRef.current = resto; setAreaStatus(resto)
+    } else {
+      clearTimeout(saveTimer.current)
+      const { fila, error } = await marcarAreaLista(estimation.id, a, profile)
+      if (error) { toast('No se pudo: ' + error.message, true); return }
+      const nuevo = { ...areaStatus, [a]: fila }
+      areaStatusRef.current = nuevo; setAreaStatus(nuevo)
+      toast(`${a} marcada como lista ✓`)
+    }
+  }
+
   const estNumLabel = `#${String(estimation.number).padStart(3, '0')}`
   const monthOpts = monthOptions(estimation.period_from, project.start_date, project.end_date)
 
@@ -359,7 +405,7 @@ export default function Estimation() {
 
       {/* Banner readonly */}
       {readonly && (
-        <div className="readonly-banner">
+        <div className="readonly-banner no-print">
           <span>{soloLectura && estimation.status !== 'Enviada'
             ? <>👁 Tienes acceso de <strong>solo lectura</strong> a esta estimación.</>
             : <>📋 Esta estimación está marcada como <strong>{estimation.status}</strong> y no puede editarse.</>}</span>
@@ -376,11 +422,12 @@ export default function Estimation() {
         <div className="flex" style={{ flexWrap: 'wrap', gap: 8 }}>
           {!readonly && <>
             <button className="btn btn-outline" onClick={() => { toast('Borrador guardado ✓') }}>Guardar borrador</button>
-            <button className="btn btn-primary" onClick={() => setModal({
+            {perms.todo && <button className="btn btn-primary" onClick={() => setModal({
               title: '✉ Marcar Estimación como Enviada',
-              body: '<p>Una vez marcada como <strong>Enviada</strong>, la estimación no podrá editarse.</p><p style="margin-top:8px;color:var(--text-muted)">¿Confirmas que deseas marcarla como Enviada?</p>',
+              body: (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
+                '<p>Una vez marcada como <strong>Enviada</strong>, la estimación no podrá editarse.</p><p style="margin-top:8px;color:var(--text-muted)">¿Confirmas que deseas marcarla como Enviada?</p>',
               onConfirm: markSent,
-            })}>Marcar como Enviada</button>
+            })}>Marcar como Enviada</button>}
           </>}
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/setup`)}>⚙ Configuración</button>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/history`)}>📋 Historial</button>
@@ -388,7 +435,7 @@ export default function Estimation() {
       </div>
 
       {/* Pill estado */}
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }} className="no-print">
         <span className={`status-pill${saving ? ' dirty' : ''}`}>{saving ? 'Guardando...' : 'Guardado'}</span>
       </div>
 
@@ -396,7 +443,46 @@ export default function Estimation() {
       <div className="tabs no-print">
         <div className={`tab${activeTab === 'estimation' ? ' active' : ''}`} onClick={() => setActiveTab('estimation')}>Estimación</div>
         <div className={`tab${activeTab === 'report' ? ' active' : ''}`} onClick={() => setActiveTab('report')}>Reporte Mensual</div>
+        <div className={`tab${activeTab === 'cliente' ? ' active' : ''}`} onClick={() => setActiveTab('cliente')}>Hoja para cliente</div>
       </div>
+
+      {/* Cierre del mes: cada área marca su avance como listo */}
+      {estimation.status === 'Borrador' && activeTab !== 'cliente' && areasAplican.length > 0 && (
+        <div className="card mb-md no-print" style={{ borderLeft: `4px solid ${todasListas ? 'var(--green)' : diasParaCorte(corte) < 0 ? 'var(--danger)' : 'var(--warning)'}` }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 700, color: 'var(--navy)' }}>Cierre del mes</div>
+              <div style={{ fontSize: 12, color: diasParaCorte(corte) < 0 && !todasListas ? 'var(--danger)' : 'var(--text-muted)' }}>
+                Corte: {fmtCorte(corte)} · {textoCorte(corte)}
+              </div>
+            </div>
+            {perms.todo && (
+              <button className="btn btn-primary" disabled={!todasListas} onClick={() => setActiveTab('cliente')}
+                title={todasListas ? '' : `Falta: ${areasPendientes.join(', ')}`}>
+                {todasListas ? '📄 Generar estimación para cliente' : `Faltan ${areasPendientes.length} área${areasPendientes.length > 1 ? 's' : ''}`}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${areasAplican.length}, 1fr)`, gap: 8 }}>
+            {areasAplican.map(a => {
+              const st = areaStatus[a]
+              return (
+                <div key={a} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 10px', background: st ? 'var(--green-soft)' : 'var(--surface)' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: st ? 'var(--green-dark)' : 'var(--text-soft)' }}>{st ? '✓' : '⏳'} {a}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', margin: '2px 0 6px' }}>
+                    {st ? `Lista · ${(st.listo_nombre || st.listo_por).split(' ')[0]} · ${new Date(st.listo_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}` : 'Pendiente'}
+                  </div>
+                  {puedeMarcar(a) && (
+                    <button className={`btn btn-sm ${st ? 'btn-outline' : 'btn-primary'}`} onClick={() => toggleArea(a)}>
+                      {st ? 'Quitar "lista"' : 'Mi área está lista'}
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── TAB: ESTIMACIÓN ─────────────────────────────────────── */}
       {activeTab === 'estimation' && (
@@ -509,10 +595,14 @@ export default function Estimation() {
                   </div>
                 )
               }
+              const ro = !puedeEditar(d)
               return (
                 <div key={d.id} className="discipline-block">
                   <div className="discipline-header">
-                    <div className="discipline-name">{d.name}</div>
+                    <div className="discipline-name">
+                      {d.name}
+                      {ro && !readonly && <span style={{ fontSize: 10, fontWeight: 600, background: 'var(--surface-2)', color: 'var(--text-muted)', padding: '2px 8px', borderRadius: 99, marginLeft: 8 }}>🔒 Lo captura {disciplineArea(d) || 'el líder'}</span>}
+                    </div>
                     <div className="discipline-stats">
                       <span>{s.conDesc === 0 && hasFiniquitoConcepts(d)
                         ? <>Finiquito: <strong>{fmtMoney(totals.finiquito, project.currency)}</strong></>
@@ -578,7 +668,7 @@ export default function Estimation() {
                               style={{ background: tieneParcialPendiente ? 'rgba(251,191,36,.06)' : undefined }}>
                               {/* Checkbox */}
                               <td className="center">
-                                <input type="checkbox" checked={!!item.included} disabled={readonly}
+                                <input type="checkbox" checked={!!item.included} disabled={ro}
                                   onChange={e => scheduleItemSave(c.id, { ...item, included: e.target.checked }, d, c)} />
                                 {tieneParcialPendiente && <div style={{ fontSize: 9, color: 'var(--warning)', marginTop: 2, textAlign: 'center' }}>Pendiente</div>}
                               </td>
@@ -637,7 +727,7 @@ export default function Estimation() {
                                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, cursor: 'pointer', color: item.parcial_enabled || tieneParcialPendiente ? 'var(--warning)' : 'var(--text-muted)' }}>
                                     <input type="checkbox"
                                       checked={!!item.parcial_enabled || tieneParcialPendiente}
-                                      disabled={readonly || tieneParcialPendiente}
+                                      disabled={ro || tieneParcialPendiente}
                                       style={{ accentColor: 'var(--warning)' }}
                                       onChange={e => scheduleItemSave(c.id, { ...item, parcial_enabled: e.target.checked, pct_parcial: e.target.checked ? (item.pct_parcial || pctDisponible) : 0 }, d, c)} />
                                     {item.parcial_enabled || tieneParcialPendiente ? '🔶 Parcial' : 'Parcial'}
@@ -647,7 +737,7 @@ export default function Estimation() {
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                         <input type="number" step="1" min="0" max={pctDisponible}
                                           value={Math.round((item.pct_parcial || 0) * 10) / 10}
-                                          disabled={readonly}
+                                          disabled={ro}
                                           style={{ width: 52, textAlign: 'right', padding: '3px 5px', border: '1px solid var(--warning)', borderRadius: 4, fontWeight: 700, color: 'var(--warning)', fontSize: 13 }}
                                           onChange={e => scheduleItemSave(c.id, { ...item, pct_parcial: parseFloat(e.target.value) || 0 }, d, c)} />
                                         <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--warning)' }}>%</span>
@@ -661,12 +751,12 @@ export default function Estimation() {
                               {/* Atraso */}
                               <td>
                                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-soft)', cursor: 'pointer' }}>
-                                  <input type="checkbox" checked={!!item.delayed} disabled={readonly}
+                                  <input type="checkbox" checked={!!item.delayed} disabled={ro}
                                     onChange={e => scheduleItemSave(c.id, { ...item, delayed: e.target.checked }, d, c)} />
                                   ¿Atraso?
                                 </label>
                                 {item.delayed && (
-                                  <input placeholder="Causa" value={item.cause || ''} disabled={readonly}
+                                  <input placeholder="Causa" value={item.cause || ''} disabled={ro}
                                     style={{ marginTop: 3, width: '100%', fontSize: 11, padding: '3px 5px', border: '1px solid var(--border)', borderRadius: 3 }}
                                     onChange={e => scheduleItemSave(c.id, { ...item, cause: e.target.value }, d, c)} />
                                 )}
@@ -694,6 +784,31 @@ export default function Estimation() {
       )}
 
       {/* ── TAB: REPORTE MENSUAL ─────────────────────────────────── */}
+      {activeTab === 'cliente' && (
+        <div>
+          <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: areasPendientes.length && estimation.status === 'Borrador' ? 'var(--danger)' : 'var(--text-muted)' }}>
+              {estimation.status === 'Enviada' ? 'Estimación enviada.'
+                : areasPendientes.length ? `Vista previa: falta que marquen como lista ${areasPendientes.join(', ')}.`
+                : 'Todas las áreas están listas. Revisa y descarga.'}
+            </div>
+            <div className="flex" style={{ gap: 8 }}>
+              <button className="btn btn-outline" onClick={() => descargarExcel(hoja).catch(e => toast('No se pudo generar el Excel: ' + e.message, true))}>⬇ Descargar Excel</button>
+              <button className="btn btn-outline" onClick={() => window.print()}>📄 Imprimir / PDF</button>
+              {estimation.status === 'Borrador' && perms.todo && (
+                <button className="btn btn-primary" onClick={() => setModal({
+                  title: '✉ Marcar Estimación como Enviada',
+                  body: (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
+                    '<p>Una vez marcada como <strong>Enviada</strong>, la estimación no podrá editarse.</p>',
+                  onConfirm: markSent,
+                })}>Marcar como Enviada</button>
+              )}
+            </div>
+          </div>
+          <HojaCliente hoja={hoja} />
+        </div>
+      )}
+
       {activeTab === 'report' && (() => {
         const rpt = reportData || {}
         const reportReadonly = estimation.report_sent === true || soloLectura
