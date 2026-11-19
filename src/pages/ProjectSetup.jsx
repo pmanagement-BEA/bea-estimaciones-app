@@ -34,7 +34,9 @@ function parseEstimacionCSV(text) {
     const cols = parseCSVLine(lines[i])
     if (cols.length < 3) continue
     const discName = (cols[COL.disciplina] || '').trim()
-    const clave    = (cols[COL.clave]       || '').trim()
+    const claveCsv = (cols[COL.clave]       || '').trim()
+    // Excel a veces guarda la clave como número con basura de punto flotante (6.029999999999999 → 6.03)
+    const clave    = /^\d+\.\d{5,}$/.test(claveCsv) ? (Math.round(Number(claveCsv) * 100) / 100).toFixed(2) : claveCsv
     const desc     = (cols[COL.descripcion] || '').trim()
     const entrega  = COL.entregable !== -1 ? (cols[COL.entregable] || '').trim() : ''
     const montoRaw = COL.monto !== -1 ? (cols[COL.monto] || '0').trim() : '0'
@@ -47,6 +49,19 @@ function parseEstimacionCSV(text) {
     }
   }
   return disciplines
+}
+
+// Campo numérico que se ve con 2 decimales (11.764706 → 11.76) pero guarda el valor exacto
+// mientras nadie lo edite: así no cambian los montos que vienen de los libros.
+function Numero2({ value, onChange, ...props }) {
+  const [texto, setTexto] = useState(null)
+  const corto = value === null || value === undefined || value === '' ? '' : String(Math.round(Number(value) * 100) / 100)
+  return (
+    <input type="number" {...props} value={texto ?? corto}
+      onFocus={() => setTexto(corto)}
+      onChange={e => { setTexto(e.target.value); onChange(e) }}
+      onBlur={() => setTexto(null)} />
+  )
 }
 
 // ── Listas de opciones ──────────────────────────────────────────────────────
@@ -99,19 +114,19 @@ function buildTemplateDisciplines(mesesF2 = 8, mesesF3 = 18) {
     cxConcepts.push({ key: `cx.seg.${String(i).padStart(2, '0')}`, description: `Seguimiento de proyecto mes ${i}`, deliverable: '1. Reporte.', pct: Math.round((100 / (n3 + 3)) * 10) / 10, month: '', type: 'Normal' })
   }
   cxConcepts.push(
-    { key: 'cx.fin.01', description: 'Revisión de pruebas pre-funcionales de los sistemas', deliverable: '1. Reporte.', pct: 0, month: '', type: 'Finiquito' },
-    { key: 'cx.fin.02', description: 'Revisión de Pruebas funcionales de los sistemas', deliverable: '1. Reporte.', pct: 0, month: '', type: 'Finiquito' },
-    { key: 'cx.fin.03', description: 'Integración del manual de O&M general y reporte final', deliverable: '1. Documento.', pct: 0, month: '', type: 'Finiquito' },
+    { key: 'cx.fin.01', description: 'Revisión de pruebas pre-funcionales de los sistemas', deliverable: '1. Reporte.', pct: 100 / (n3 + 3), month: '', type: 'Normal' },
+    { key: 'cx.fin.02', description: 'Revisión de Pruebas funcionales de los sistemas', deliverable: '1. Reporte.', pct: 100 / (n3 + 3), month: '', type: 'Normal' },
+    { key: 'cx.fin.03', description: 'Integración del manual de O&M general y reporte final', deliverable: '1. Documento.', pct: 100 / (n3 + 3), month: '', type: 'Normal' },
   )
 
-  return [
+  const plantilla = [
     {
       name: 'Fase Uno: Diagnóstico, Factibilidad y Plan de Acción para Certificación LEED',
       concepts: [
-        { key: '1.01', description: 'Diagnóstico de sustentabilidad del proyecto: revisión de condiciones del sitio, programa arquitectónico y estrategias de diseño pasivo', deliverable: '1. Reporte de diagnóstico.', pct: 0, month: '', type: 'Normal' },
-        { key: '1.02', description: 'Análisis de factibilidad LEED: evaluación de créditos alcanzables, nivel de certificación objetivo y brechas principales', deliverable: '1. Matriz de factibilidad.', pct: 0, month: '', type: 'Normal' },
-        { key: '1.03', description: 'Plan Estratégico de Acción LEED: hoja de ruta de créditos, responsables, entregables y cronograma de certificación', deliverable: '1. Plan Estratégico.', pct: 0, month: '', type: 'Normal' },
-        { key: '1.04', description: 'Taller de alineación con equipo de diseño: sesión de trabajo para socializar el plan LEED y definir compromisos por disciplina', deliverable: '1. Minuta de taller.', pct: 0, month: '', type: 'Normal' },
+        { key: '1.01', description: 'Diagnóstico de sustentabilidad del proyecto: revisión de condiciones del sitio, programa arquitectónico y estrategias de diseño pasivo', deliverable: '1. Reporte de diagnóstico.', pct: 25, month: '', type: 'Normal' },
+        { key: '1.02', description: 'Análisis de factibilidad LEED: evaluación de créditos alcanzables, nivel de certificación objetivo y brechas principales', deliverable: '1. Matriz de factibilidad.', pct: 25, month: '', type: 'Normal' },
+        { key: '1.03', description: 'Plan Estratégico de Acción LEED: hoja de ruta de créditos, responsables, entregables y cronograma de certificación', deliverable: '1. Plan Estratégico.', pct: 25, month: '', type: 'Normal' },
+        { key: '1.04', description: 'Taller de alineación con equipo de diseño: sesión de trabajo para socializar el plan LEED y definir compromisos por disciplina', deliverable: '1. Minuta de taller.', pct: 25, month: '', type: 'Normal' },
       ],
     },
     { name: 'Fase Dos: Asesoría y Gestión LEED Diseño e Ingenierías', concepts: fase2Concepts },
@@ -137,12 +152,30 @@ function buildTemplateDisciplines(mesesF2 = 8, mesesF3 = 18) {
     {
       name: 'Certificación (FINIQUITO)',
       concepts: [
-        { key: '7.01', description: 'Envio a revision preliminar', deliverable: '1. Submittals.', pct: 0, month: '', type: 'Finiquito' },
-        { key: '7.02', description: 'Envio a revision final', deliverable: '1. Submittals.', pct: 0, month: '', type: 'Finiquito' },
-        { key: '7.03', description: 'Certificacion', deliverable: '1. Certificado.', pct: 0, month: '', type: 'Finiquito' },
+        { key: '7.01', description: 'Envio a revision preliminar', deliverable: '1. Submittals.', pct: 45, month: '', type: 'Finiquito' },
+        { key: '7.02', description: 'Envio a revision final', deliverable: '1. Submittals.', pct: 30, month: '', type: 'Finiquito' },
+        { key: '7.03', description: 'Certificacion', deliverable: '1. Certificado.', pct: 25, month: '', type: 'Finiquito' },
       ],
     },
   ]
+  return plantilla.map(d => ({ ...d, concepts: a100(d.concepts) }))
+}
+
+// Reparte para que los conceptos de cada tipo sumen exactamente 100% (respeta los pesos;
+// el redondeo se ajusta en el último concepto).
+function a100(concepts) {
+  const out = concepts.map(c => ({ ...c }))
+  for (const tipo of ['Normal', 'Finiquito']) {
+    const grupo = out.filter(c => c.type === tipo)
+    const total = grupo.reduce((s, c) => s + c.pct, 0)
+    if (!grupo.length || total <= 0) continue
+    let acumulado = 0
+    grupo.forEach((c, i) => {
+      c.pct = i === grupo.length - 1 ? Math.round((100 - acumulado) * 1e6) / 1e6 : Math.round((c.pct / total) * 100 * 1e6) / 1e6
+      acumulado += c.pct
+    })
+  }
+  return out
 }
 
 function getTeamMembers() {
@@ -195,6 +228,7 @@ export default function ProjectSetup() {
   const [members, setMembers] = useState({}) // { rol: [email] }
   const saveTimer = useRef(null)
   const csvInputRef = useRef(null)
+  const cargandoPlantilla = useRef(false)
 
   // ── Carga inicial ──────────────────────────────────────────────────────────
   useEffect(() => { fetchAll() }, [id])
@@ -283,6 +317,8 @@ export default function ProjectSetup() {
   }
 
   async function addDefaultDisciplines() {
+    if (cargandoPlantilla.current || disciplines.length > 0) return
+    cargandoPlantilla.current = true
     setSaving(true)
     const template = buildTemplateDisciplines(project.meses_fase2 || 8, project.meses_fase3 || 18)
     const newDiscs = []
@@ -290,7 +326,7 @@ export default function ProjectSetup() {
       const t = template[i]
       const { data: disc, error: dErr } = await supabase
         .from('disciplines').insert({ project_id: id, name: t.name, sort_order: i }).select().single()
-      if (dErr) { toast('Error al crear disciplinas', true); setSaving(false); return }
+      if (dErr) { toast('Error al crear disciplinas', true); setSaving(false); cargandoPlantilla.current = false; return }
       let concepts = []
       if (t.concepts.length > 0) {
         const rows = t.concepts.map((c, j) => ({
@@ -299,13 +335,14 @@ export default function ProjectSetup() {
           pct: c.pct, month: c.month || '', type: c.type || 'Normal', sort_order: j,
         }))
         const { data: cData, error: cErr } = await supabase.from('concepts').insert(rows).select()
-        if (cErr) { toast('Error al crear conceptos', true); setSaving(false); return }
+        if (cErr) { toast('Error al crear conceptos', true); setSaving(false); cargandoPlantilla.current = false; return }
         concepts = [...(cData || [])].sort((a, b) => a.sort_order - b.sort_order)
       }
       newDiscs.push({ ...disc, concepts })
     }
     setDisciplines(newDiscs)
     setSaving(false)
+    cargandoPlantilla.current = false
     toast('Disciplinas y conceptos cargados ✓')
   }
 
@@ -449,6 +486,20 @@ export default function ProjectSetup() {
     const estimado = ds.reduce((n, d) => n + (d.concepts || []).filter(c => c.type !== 'Finiquito').reduce((m, c) => m + (avance.acumMap[c.id] || 0), 0), 0)
     return { area, estimable, estimado, porEstimar: Math.max(0, estimable - estimado), pct: avance.areaAvance[area]?.pct ?? 0 }
   }).filter(a => a.estimable > 0.005)
+  // Revisión de %: dinero que nunca se podría estimar si los conceptos no suman 100%
+  const avisosPct = []
+  disciplines.forEach(d => {
+    const estimable = disciplineSubtotal(d, rates).estimable
+    const normales = (d.concepts || []).filter(c => c.type !== 'Finiquito')
+    const suma = normales.reduce((n, c) => n + (parseFloat(c.pct) || 0), 0)
+    if (estimable > 0.5 && Math.abs(suma - 100) > 0.05)
+      avisosPct.push(`${d.name}: los conceptos suman ${Math.round(suma * 100) / 100}% (${suma < 100 ? `faltan ${fmtMoney(estimable * (100 - suma) / 100, project.currency)} por asignar` : `${fmtMoney(estimable * (suma - 100) / 100, project.currency)} de más`})`)
+  })
+  if (totals.finiquito > 0.5) {
+    const sumaFin = disciplines.flatMap(d => d.concepts || []).filter(c => c.type === 'Finiquito').reduce((n, c) => n + (parseFloat(c.pct) || 0), 0)
+    if (Math.abs(sumaFin - 100) > 0.05)
+      avisosPct.push(`Finiquito (${fmtMoney(totals.finiquito, project.currency)}): sus conceptos suman ${Math.round(sumaFin * 100) / 100}%${sumaFin === 0 ? ', no se podrá cobrar desde la estimación' : ''}. Lo usual en BEA: 45% revisión preliminar, 30% revisión final, 25% certificación.`)
+  }
   const hasRateColumns = 'anticipo_pct' in project
   const sentCount = estimations.filter(e => e.status === 'Enviada').length
   const teamMembers = getTeamMembers()
@@ -601,12 +652,12 @@ export default function ProjectSetup() {
               onChange={e => setProjectField('meses_fase3', parseInt(e.target.value) || 18)} />
           </Field>
           <Field label="Anticipo (% del importe con descuento)">
-            <input type="number" min="0" max="100" step="0.01" value={rates.anticipoPct} disabled={!hasRateColumns}
+            <Numero2 min="0" max="100" step="0.01" value={rates.anticipoPct} disabled={!hasRateColumns}
               title={hasRateColumns ? '' : 'Falta correr la migración de la base de datos'}
               onChange={e => setProjectField('anticipo_pct', parseFloat(e.target.value) || 0)} />
           </Field>
           <Field label="Finiquito (% retenido hasta certificación)">
-            <input type="number" min="0" max="100" step="0.01" value={rates.finiquitoPct} disabled={!hasRateColumns}
+            <Numero2 min="0" max="100" step="0.01" value={rates.finiquitoPct} disabled={!hasRateColumns}
               title={hasRateColumns ? '' : 'Falta correr la migración de la base de datos'}
               onChange={e => setProjectField('finiquito_pct', parseFloat(e.target.value) || 0)} />
           </Field>
@@ -688,7 +739,7 @@ export default function ProjectSetup() {
           </button>
           <div className="flex gap-sm">
             {disciplines.length === 0 && (
-              <button className="btn btn-dark btn-sm" onClick={addDefaultDisciplines}>
+              <button className="btn btn-dark btn-sm" onClick={addDefaultDisciplines} disabled={saving}>
                 ⚡ Cargar disciplinas BEA
               </button>
             )}
@@ -740,7 +791,7 @@ export default function ProjectSetup() {
                           onChange={e => saveDisciplineField(d.id, 'monto_total', parseFloat(e.target.value) || 0)} />
                       </td>
                       <td className="num">
-                        <input type="number" step="0.01"
+                        <Numero2 step="0.01"
                           value={d.descuento}
                           onChange={e => saveDisciplineField(d.id, 'descuento', parseFloat(e.target.value) || 0)} />
                       </td>
@@ -803,6 +854,12 @@ export default function ProjectSetup() {
             </div>
           </div>
 
+          {avisosPct.length > 0 && (
+            <div className="warning-banner" style={{ display: 'block' }}>
+              <div style={{ marginBottom: 4 }}>⚠ Revisa los % de conceptos: así como están, parte del contrato no se podría estimar.</div>
+              <ul style={{ margin: '0 0 0 18px', fontWeight: 500 }}>{avisosPct.map(t => <li key={t}>{t}</li>)}</ul>
+            </div>
+          )}
           {abierto('conceptos') && disciplines.map(d => {
             const s = disciplineSubtotal(d, rates)
             const abiertaD = abierto('d:' + d.id)
