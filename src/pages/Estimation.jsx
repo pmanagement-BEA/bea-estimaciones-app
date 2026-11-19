@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS, disciplineArea } from '../utils/calculations'
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
-import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima } from '../utils/cierre'
+import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
@@ -178,10 +178,8 @@ export default function Estimation() {
   // ── Cambiar mes ────────────────────────────────────────────────────────────
   async function changeMonth(value) {
     if (!value) return
-    const [y, m] = value.split('-').map(Number)
-    const lastDay = new Date(y, m, 0).getDate()
-    const period_from = `${y}-${String(m).padStart(2, '0')}-01`
-    const period_to   = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    // Conserva el patrón de días del proyecto (p. ej. del 11 al 10)
+    const { period_from, period_to } = moverPeriodo(estimation, value)
     setEstimation(prev => ({ ...prev, period_from, period_to }))
     await supabase.from('estimations').update({ period_from, period_to }).eq('id', estimation.id)
   }
