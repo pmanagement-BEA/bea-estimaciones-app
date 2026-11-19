@@ -7,6 +7,7 @@ import { fmtMoney, fmtDate } from '../utils/format'
 import { incorporarAditivaAlContrato, nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole } from '../lib/directorio'
+import { useAjeno } from '../hooks/useAjeno'
 
 const ALL_STATUSES = ['Borrador', 'Enviada', 'Aceptada', 'Negada', 'Negociacion']
 
@@ -21,6 +22,7 @@ export default function AditivaForm() {
   const isNew = !adId || adId === 'new'
 
   const [project, setProject]     = useState(null)
+  const ajeno = useAjeno(project, profile)
   const [aditiva, setAditiva]     = useState(null)
   const [alcances, setAlcances]   = useState([emptyAlcance()])
   const [loading, setLoading]     = useState(true)
@@ -137,7 +139,7 @@ export default function AditivaForm() {
 
   const total = alcances.reduce((s, al) => s + (parseFloat(al.monto) || 0), 0)
   const numLabel = `#${String(aditiva.number).padStart(3, '0')}`
-  const isEditable = !['Aceptada', 'Negada'].includes(aditiva.status) && !isReadOnlyRole(profile)
+  const isEditable = !['Aceptada', 'Negada'].includes(aditiva.status) && !isReadOnlyRole(profile) && !ajeno
 
   return (
     <div className="main">

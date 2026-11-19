@@ -19,9 +19,10 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState('Activo')
   const [mine, setMine] = useState({}) // { project_id: [rol] }
   const [onlyMine, setOnlyMine] = useState(true)
+  // Solo lectura (p. ej. Facturación) no está asignado a proyectos: de inicio ve todos
+  useEffect(() => { if (profile?.role === 'lectura') setOnlyMine(false) }, [profile?.role])
   const [estadoAreas, setEstadoAreas] = useState({}) // { estimation_id: { area: fila } }
 
-  const isCoord = profile?.role === 'coordinador'
 
   useEffect(() => { fetchAll() }, [])
   useEffect(() => {
@@ -48,9 +49,9 @@ export default function Dashboard() {
 
   if (loading) return <div className="main"><div className="spinner" /></div>
 
-  // ── Qué proyectos ve: el coordinador puede ver todos, pero por defecto solo los suyos
-  //    (igual que en Mis Proyectos). Los KPIs se calculan sobre lo que se ve.
-  const verTodos = isCoord && !onlyMine
+  // ── Qué proyectos ve: todos pueden ver todos (por si una asignación quedó mal), pero por
+  //    defecto solo los suyos (igual que en Mis Proyectos). Los KPIs se calculan sobre lo que se ve.
+  const verTodos = !onlyMine
   const projects = verTodos ? allProjects : allProjects.filter(p => mine[p.id] || p.user_id === profile?.id)
 
   // ── Filtrado por estado ───────────────────────────────────────────────────
@@ -94,7 +95,7 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="flex" style={{ gap: 8, alignItems: 'center' }}>
-          {isCoord && (
+          {(
             <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />
               Solo donde estoy asignado
