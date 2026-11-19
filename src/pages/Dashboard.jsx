@@ -239,7 +239,7 @@ export default function Dashboard() {
                         if (!borrador || !aplican.length) return <span style={{ color: 'var(--text-muted)' }}>—</span>
                         const st = estadoAreas[borrador.id] || {}
                         const corto = { 'Consultoría': 'CV', 'Commissioning': 'CX', 'Modelación': 'ME' }
-                        const tarde = diasParaCorte(corteDeEstimacion(borrador.period_from)) < 0
+                        const tarde = diasParaCorte(corteDeEstimacion(borrador.period_from, borrador.period_to)) < 0
                         return (
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }} title={aplican.map(a => `${a}: ${st[a] ? 'lista' : 'pendiente'}`).join('\n')}>
                             {aplican.map(a => (
