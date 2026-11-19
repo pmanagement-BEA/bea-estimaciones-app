@@ -13,6 +13,7 @@ import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole, fetchDirectorio, fetchProjectMembers } from '../lib/directorio'
 import { descargarReporteExcel, AREAS_REPORTE, ETIQUETA_AREA } from '../lib/reporteExcel'
+import LogoCliente, { leerLogoCliente } from '../components/LogoCliente'
 
 // Lo que pasa del reporte anterior al nuevo: lo que sigue vigente (lo realizado en el mes empieza vacío)
 const CAMPOS_HEREDADOS = ['acciones_pendientes', 'informacion_pendiente', 'riesgos', 'no_riesgos', 'entregables', 'resumen_proyecto',
@@ -886,10 +887,15 @@ export default function Estimation() {
         const ordenArea = Object.fromEntries(AREAS_REPORTE.map(([a], i) => [a, i]))
         const accionesOrdenadas = rd('acciones_realizadas').map((r, i) => [r, i])
           .sort((x, y) => (ordenArea[x[0].area || 'Consultoría'] - ordenArea[y[0].area || 'Consultoría']) || x[1] - y[1]).map(x => x[0])
-        const bajarReporteExcel = () => descargarReporteExcel({
-          proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, equipo,
-          rpt: { ...rpt, inicio_contrato: rpt.inicio_contrato || project.start_date, fin_contrato: rpt.fin_contrato || project.end_date },
-        }).catch(err => toast('No se pudo generar el Excel: ' + err.message, true))
+        const bajarReporteExcel = async () => {
+          try {
+            await descargarReporteExcel({
+              proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, equipo,
+              logoCliente: await leerLogoCliente(project),
+              rpt: { ...rpt, inicio_contrato: rpt.inicio_contrato || project.start_date, fin_contrato: rpt.fin_contrato || project.end_date },
+            })
+          } catch (err) { toast('No se pudo generar el Excel: ' + err.message, true) }
+        }
 
         return (
           <div className={reportReadonly ? 'readonly' : ''}>
@@ -948,6 +954,7 @@ export default function Estimation() {
                 <div className="field"><label>Modelación energética</label><input value={equipo.me || '—'} disabled /></div>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }} className="no-print">El equipo sale de la tarjeta del proyecto (Configuración → Equipo).</div>
+              <LogoCliente project={project} puedeCambiar={perms.todo && !soloLectura} onCambio={logo_cliente => setProject(p => ({ ...p, logo_cliente }))} />
             </div>
 
             {/* Acciones Realizadas */}
