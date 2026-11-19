@@ -2,6 +2,7 @@ import { fmtMoney } from '../utils/format'
 import { armarHoja } from '../lib/hoja'
 export { armarHoja }
 export { descargarEstimacionBea as descargarExcel } from '../lib/estimacionExcel'
+import { numerosDisciplina } from '../lib/estimacionExcel'
 
 const BASE = import.meta.env.BASE_URL || '/'
 const borde = '1px solid #000'
@@ -31,6 +32,7 @@ export default function HojaCliente({ hoja }) {
   const estimablePct = 100 - (hoja.anticipoPct || 0) - (hoja.finiquitoPct || 0)
   const conFases = hoja.bloques.some(b => b.construccion)
   let fase = null
+  const numeros = numerosDisciplina(hoja.bloques)
   const resumen = [
     ['IMPORTE TOTAL', m(t.importe), 'ACUMULADO ANTERIOR', m(t.acumAnterior), '% AVANCE ESTA ESTIMACIÓN', pct2(t.avanceEsta)],
     [`ANTICIPO (${hoja.anticipoPct || 0}%)`, t.anticipo > 0.005 ? m(t.anticipo) : 'NA', 'ESTIMACIÓN ACTUAL', m(t.actual), '% DE AVANCE GLOBAL DE PROYECTO', pct2(t.avanceGlobal)],
@@ -97,7 +99,7 @@ export default function HojaCliente({ hoja }) {
             const verde = { ...celda, background: '#EAF1DD', fontSize: 11 }
             out.push(
               <tr key={'b' + bi}>
-                <td style={{ ...verde, textAlign: 'center' }}>{bi + 1}</td>
+                <td style={{ ...verde, textAlign: 'center' }}>{numeros[bi]}</td>
                 <td colSpan={2} style={verde}>{b.nombre}</td>
                 <td style={{ ...verde, ...num }}>{fin ? 'FINIQUITO' : m(b.monto)}</td>
                 <td colSpan={2} style={{ ...verde, ...num }}>{fin ? 'FINIQUITO' : m(b.anterior)}</td>
