@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
-import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS, projectPhase } from '../utils/calculations'
+import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS, projectPhase, estimationSummary } from '../utils/calculations'
 import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
 import { useAuth } from '../hooks/useAuth'
 import { useAjeno, AVISO_AJENO } from '../hooks/useAjeno'
@@ -441,6 +441,14 @@ export default function ProjectSetup() {
 
   const rates = projectRates(project)
   const totals = projectTotals(disciplines, rates)
+  // Lo estimado hasta hoy (solo estimaciones Enviadas), igual que en la pantalla de estimación
+  const avance = estimationSummary(disciplines, estimations, null, null, rates)
+  const porArea = AREAS.map(area => {
+    const ds = disciplines.filter(d => disciplineArea(d) === area)
+    const estimable = ds.reduce((n, d) => n + disciplineSubtotal(d, rates).estimable, 0)
+    const estimado = ds.reduce((n, d) => n + (d.concepts || []).filter(c => c.type !== 'Finiquito').reduce((m, c) => m + (avance.acumMap[c.id] || 0), 0), 0)
+    return { area, estimable, estimado, porEstimar: Math.max(0, estimable - estimado), pct: avance.areaAvance[area]?.pct ?? 0 }
+  }).filter(a => a.estimable > 0.005)
   const hasRateColumns = 'anticipo_pct' in project
   const sentCount = estimations.filter(e => e.status === 'Enviada').length
   const teamMembers = getTeamMembers()
@@ -519,6 +527,26 @@ export default function ProjectSetup() {
           </div>
         </div>
       </div>
+
+      {/* Por estimar y avance (lo enviado hasta hoy) */}
+      {totals.estimable > 0.005 && (
+        <div className="grid grid-4 mb-md">
+          <div className="stat-box">
+            <div className="stat-label">Por estimar</div>
+            <div className="stat-value">{fmtMoney(avance.porEstimar, project.currency)}</div>
+            <div className="progress" style={{ margin: '6px 0 4px' }}><div className="progress-bar" style={{ width: `${Math.min(100, avance.advanceGlobal)}%` }} /></div>
+            <div className="stat-sub">Avance global <strong>{fmtPct(avance.advanceGlobal)}</strong> · Estimado {fmtMoney(avance.acumGlobal, project.currency)}</div>
+          </div>
+          {porArea.map(a => (
+            <div className="stat-box" key={a.area}>
+              <div className="stat-label">Por estimar · {a.area}</div>
+              <div className="stat-value">{fmtMoney(a.porEstimar, project.currency)}</div>
+              <div className="progress" style={{ margin: '6px 0 4px' }}><div className="progress-bar" style={{ width: `${Math.min(100, a.pct)}%` }} /></div>
+              <div className="stat-sub">Avance <strong>{fmtPct(a.pct)}</strong> · Estimado {fmtMoney(a.estimado, project.currency)} de {fmtMoney(a.estimable, project.currency)}</div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {soloLectura && (
         <div className="readonly-banner" style={{ marginBottom: 16 }}>👁 {ajeno ? AVISO_AJENO : 'Tienes acceso de solo lectura a este proyecto.'}</div>
