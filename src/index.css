@@ -249,3 +249,18 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 .resumen-plegado{font-size:12px;font-weight:400;color:var(--text-muted)}
 .seccion-plegable:focus{outline:none}
 .seccion-plegable:focus-visible{outline:2px solid var(--green);outline-offset:4px;border-radius:6px}
+
+/* ── Imprimir / PDF de la hoja para cliente: solo el formato RC-OP-11 ─────────
+   Doble carta horizontal (como el Excel), encabezados de columna en cada hoja y colores tal cual. */
+@page hoja-bea { size: 17in 11in; margin: 8mm }
+@media print {
+  body.imprimiendo-hoja { background: #fff !important }
+  body.imprimiendo-hoja .topbar,
+  body.imprimiendo-hoja #root *:not(:has(.hoja-cliente)):not(.hoja-cliente):not(.hoja-cliente *) { display: none !important }
+  body.imprimiendo-hoja *:has(.hoja-cliente) { padding: 0 !important; margin: 0 !important; border: 0 !important; box-shadow: none !important; background: none !important; max-width: none !important; width: auto !important }
+  body.imprimiendo-hoja .hoja-cliente { page: hoja-bea; border: 0 !important; border-radius: 0 !important; padding: 0 !important; overflow: visible !important; width: 100% !important }
+  body.imprimiendo-hoja .hoja-cliente,
+  body.imprimiendo-hoja .hoja-cliente * { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+  body.imprimiendo-hoja .hoja-cliente thead { display: table-header-group }
+  body.imprimiendo-hoja .hoja-cliente tr { break-inside: avoid }
+}

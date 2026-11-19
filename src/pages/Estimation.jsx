@@ -8,6 +8,7 @@ import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, proje
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
 import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo, inicioDelPeriodo, fechaLocal } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
+import { cargarExcelJS } from '../lib/cargarModulo'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
@@ -64,6 +65,8 @@ export default function Estimation() {
   const [loading, setLoading]         = useState(true)
   const [saving, setSaving]           = useState(false)
   const [activeTab, setActiveTab]     = useState('estimation')
+  // Al abrir la hoja para cliente se precarga ExcelJS: la descarga sale al instante
+  useEffect(() => { if (activeTab === 'cliente') cargarExcelJS().catch(() => {}) }, [activeTab])
   const [modal, setModal]             = useState(null)
   const [reportData, setReportData]   = useState(null)
   const [reportSaving, setReportSaving] = useState(false)
@@ -895,7 +898,7 @@ export default function Estimation() {
             </div>
             <div className="flex" style={{ gap: 8 }}>
               <button className="btn btn-outline" onClick={() => descargarExcel(hoja).catch(e => toast('No se pudo generar el Excel: ' + e.message, true))}>⬇ Descargar Excel</button>
-              <button className="btn btn-outline" onClick={() => window.print()}>📄 Imprimir / PDF</button>
+              <button className="btn btn-outline" onClick={() => imprimirHoja(hoja)}>📄 Imprimir / PDF</button>
               {estimation.status === 'Borrador' && perms.todo && (
                 <button className="btn btn-primary" onClick={() => setModal({
                   title: '✉ Marcar Estimación como Enviada',
@@ -1345,3 +1348,17 @@ function TogglPreview({ rows, onChange }) {
     </div>
   )
 }
+
+// Imprime solo la hoja RC-OP-11 (doble carta horizontal, como el Excel) y no la pantalla completa.
+// El nombre del PDF sale como el del Excel: "521-Estimación 17".
+function imprimirHoja(hoja) {
+  const body = document.body
+  const titulo = document.title
+  const fin = () => { body.classList.remove('imprimiendo-hoja'); document.title = titulo; window.removeEventListener('afterprint', fin) }
+  body.classList.add('imprimiendo-hoja')
+  document.title = `${(hoja.proyecto || '').split(/[-_]/)[0]}-Estimación ${hoja.numero}`
+  window.addEventListener('afterprint', fin)
+  window.print()
+  setTimeout(fin, 1000)
+}
+

@@ -4,6 +4,8 @@
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
+import { cargarExcelJS, bajarArchivo } from './cargarModulo.js'
+
 export const MONEDA = '"$"#,##0.00;[Red]"$"#,##0.00'
 const CONTABLE = '_([$$-409]* #,##0.00_);_([$$-409]* (#,##0.00);_([$$-409]* "-"??_);_(@_)'
 
@@ -299,14 +301,11 @@ export async function libroEstimacion(ExcelJS, hoja, logo) {
 }
 
 export async function descargarEstimacionBea(hoja) {
-  const ExcelJS = (await import('exceljs')).default
+  const ExcelJS = await cargarExcelJS()
   let logo = null
   try { logo = await cargarLogoBea('jpg') } catch { /* sin logo, el resto sale igual */ }
   const wb = await libroEstimacion(ExcelJS, hoja, logo)
   const buf = await wb.xlsx.writeBuffer()
-  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-  const a = document.createElement('a')
   const codigo = (hoja.proyecto || '').split(/[-_]/)[0]
-  a.href = url; a.download = `${codigo}-Estimación ${hoja.numero}.xlsx`; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  bajarArchivo(buf, `${codigo}-Estimación ${hoja.numero}.xlsx`)
 }

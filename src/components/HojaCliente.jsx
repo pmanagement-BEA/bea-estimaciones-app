@@ -8,10 +8,11 @@ const BASE = import.meta.env.BASE_URL || '/'
 const borde = '1px solid #000'
 const fino = '1px dotted #999'
 const celda = { border: borde, padding: '3px 6px', verticalAlign: 'middle' }
-const enc = { ...celda, background: '#D8D8D8', textAlign: 'center', fontWeight: 400, fontSize: 10 }
+const enc = { ...celda, background: '#D8D8D8', color: '#000', textAlign: 'center', fontWeight: 400, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0, position: 'static' }
 const num = { textAlign: 'center', whiteSpace: 'nowrap' }
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const mesAnio = d => (d ? `${MESES[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}` : 'TBD')
+const pctCorto = v => `${Math.round((Number(v) || 0) * 100) / 100}%`
 const pct2 = v => (v == null ? 'NA' : `${(Math.round(v * 100) / 100).toFixed(2)}%`)
 
 function periodoTexto(desde, hasta) {
@@ -35,9 +36,9 @@ export default function HojaCliente({ hoja }) {
   const numeros = numerosDisciplina(hoja.bloques)
   const resumen = [
     ['IMPORTE TOTAL', m(t.importe), 'ACUMULADO ANTERIOR', m(t.acumAnterior), '% AVANCE ESTA ESTIMACIÓN', pct2(t.avanceEsta)],
-    [`ANTICIPO (${hoja.anticipoPct || 0}%)`, t.anticipo > 0.005 ? m(t.anticipo) : 'NA', 'ESTIMACIÓN ACTUAL', m(t.actual), '% DE AVANCE GLOBAL DE PROYECTO', pct2(t.avanceGlobal)],
-    [`FINIQUITO (${hoja.finiquitoPct || 0}%)`, t.finiquito > 0.005 ? m(t.finiquito) : 'NA', 'ACUMULADO GLOBAL', m(t.acumGlobal), '% AVANCE LEED', pct2(t.avanceArea?.['Consultoría'])],
-    [`IMPORTE ESTIMABLE (${estimablePct}%)`, m(t.estimable), 'POR ESTIMAR', m(t.porEstimar), '% AVANCE COMMISSIONING', pct2(t.avanceArea?.Commissioning)],
+    [`ANTICIPO (${pctCorto(hoja.anticipoPct)})`, t.anticipo > 0.005 ? m(t.anticipo) : 'NA', 'ESTIMACIÓN ACTUAL', m(t.actual), '% DE AVANCE GLOBAL DE PROYECTO', pct2(t.avanceGlobal)],
+    [`FINIQUITO (${pctCorto(hoja.finiquitoPct)})`, t.finiquito > 0.005 ? m(t.finiquito) : 'NA', 'ACUMULADO GLOBAL', m(t.acumGlobal), '% AVANCE LEED', pct2(t.avanceArea?.['Consultoría'])],
+    [`IMPORTE ESTIMABLE (${pctCorto(estimablePct)})`, m(t.estimable), 'POR ESTIMAR', m(t.porEstimar), '% AVANCE COMMISSIONING', pct2(t.avanceArea?.Commissioning)],
     ['IMPORTE ESTIMABLE ADICIONAL', 'NA', '', '', '% AVANCE MODELACIÓN ENERGÉTICA', pct2(t.avanceArea?.['Modelación'])],
   ]
   return (
