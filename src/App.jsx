@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import VersionNueva from './components/VersionNueva'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { pideContrasena, supabase } from './lib/supabase'
 import CrearContrasena from './pages/CrearContrasena'
@@ -38,6 +39,7 @@ export default function App() {
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       {session && <TopBar profile={profile} onSignOut={signOut} />}
       <Toast />
+      <VersionNueva />
       <Routes>
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/" element={<PrivateRoute><Projects /></PrivateRoute>} />
