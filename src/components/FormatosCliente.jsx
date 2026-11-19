@@ -4,7 +4,7 @@ import { toast } from './Toast'
 import { NOMBRE_FORMATO } from '../lib/formatosCliente'
 
 const BUCKET = 'formatos-cliente'
-const cargarJSZip = () => import('jszip').then(m => m.default)
+import { cargarJSZip, bajarArchivo } from '../lib/cargarModulo'
 const cargarMotor = () => import('../lib/formatosCliente')
 
 export async function listarFormatos(projectId) {
@@ -28,11 +28,7 @@ async function subirArchivo(projectId, nombre, bytes) {
   return ruta
 }
 
-function descargar(bytes, nombre) {
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-  const a = document.createElement('a'); a.href = url; a.download = nombre; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
-}
+const descargar = (bytes, nombre) => bajarArchivo(bytes, nombre)
 
 const nombreSalida = (project, f, numero) => `${(project.name || '').split(/[-_]/)[0]}-Estimación ${f.nombre || NOMBRE_FORMATO[f.tipo]} ${numero}.xlsx`
 

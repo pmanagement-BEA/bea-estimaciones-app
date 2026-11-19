@@ -1,6 +1,7 @@
 // Reporte mensual en el formato BEA RC-OP-01 "REPORTE MENSUAL / SCORECARD DEL PROYECTO"
 // (mismo acomodo que el libro del reporte: columnas A–M, Arial 10, encabezados grises). ExcelJS se carga solo al usarlo.
 import { cargarLogoBea } from './estimacionExcel.js'
+import { cargarExcelJS, bajarArchivo } from './cargarModulo.js'
 
 export const AREAS_REPORTE = [
   ['Consultoría', 'CONSULTORÍA'],
@@ -237,14 +238,11 @@ export async function libroReporte(ExcelJS, datos, logo, logoCliente = null) {
 }
 
 export async function descargarReporteExcel(datos) {
-  const ExcelJS = (await import('exceljs')).default
+  const ExcelJS = await cargarExcelJS()
   let logo = null
   try { logo = await cargarLogoBea() } catch { /* sin logo, el resto sale igual */ }
   const wb = await libroReporte(ExcelJS, datos, logo, datos.logoCliente)
   const buf = await wb.xlsx.writeBuffer()
-  const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
-  const a = document.createElement('a')
   const codigo = (datos.proyecto || '').split(/[-_]/)[0]
-  a.href = url; a.download = `${codigo}-RC-OP-01 Reporte mensual ${mesReporte(datos.periodFrom)}.xlsx`; a.click()
-  setTimeout(() => URL.revokeObjectURL(url), 2000)
+  bajarArchivo(buf, `${codigo}-RC-OP-01 Reporte mensual ${mesReporte(datos.periodFrom)}.xlsx`)
 }
