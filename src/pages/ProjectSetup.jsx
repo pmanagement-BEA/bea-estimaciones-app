@@ -174,6 +174,23 @@ export default function ProjectSetup() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [project, setProject] = useState(null)
+  // Secciones plegables (se recuerda por proyecto en este navegador)
+  const claveVista = `bea-setup-vista-${id}`
+  const [vista, setVista] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(claveVista)) || {} } catch { return {} }
+  })
+  const abierto = k => !!vista[k]
+  const alternar = (k, valor) => setVista(v => {
+    const n = { ...v, [k]: valor ?? !v[k] }
+    try { localStorage.setItem(claveVista, JSON.stringify(n)) } catch { /* sin almacenamiento */ }
+    return n
+  })
+  const todasDisciplinas = (valor) => setVista(v => {
+    const n = { ...v }
+    disciplines.forEach(d => { n['d:' + d.id] = valor })
+    try { localStorage.setItem(claveVista, JSON.stringify(n)) } catch { /* sin almacenamiento */ }
+    return n
+  })
   const ajeno = useAjeno(project, profile)
   const soloLectura = isReadOnlyRole(profile) || ajeno
   const [disciplines, setDisciplines] = useState([])
@@ -642,7 +659,13 @@ export default function ProjectSetup() {
       {/* ── Disciplinas ───────────────────────────────────────── */}
       <div className="card mb-md">
         <div className="section-header">
-          <div className="section-title">Montos por Disciplina</div>
+          <button type="button" className="seccion-plegable" onClick={() => alternar('montos')} aria-expanded={abierto('montos')}>
+            <span className="chevron">{abierto('montos') ? '▾' : '▸'}</span>
+            <span className="section-title">Montos por Disciplina</span>
+            {!abierto('montos') && disciplines.length > 0 && (
+              <span className="resumen-plegado">{disciplines.length} disciplinas · Estimable {fmtMoney(totals.estimable, project.currency)}</span>
+            )}
+          </button>
           <div className="flex gap-sm">
             {disciplines.length === 0 && (
               <button className="btn btn-dark btn-sm" onClick={addDefaultDisciplines}>
@@ -652,7 +675,7 @@ export default function ProjectSetup() {
             <button className="btn btn-outline btn-sm" onClick={addDiscipline}>+ Disciplina</button>
           </div>
         </div>
-        {disciplines.length === 0 ? (
+        {!abierto('montos') && disciplines.length > 0 ? null : disciplines.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>
             Sin disciplinas. Haz clic en "Cargar disciplinas BEA" para agregar las 4 estándar, o en "+ Disciplina" para agregar manualmente.
           </div>
@@ -740,8 +763,18 @@ export default function ProjectSetup() {
       {disciplines.length > 0 && (
         <div className="mb-md">
           <div className="section-header">
-            <div className="section-title">Conceptos por Disciplina</div>
-            <div>
+            <button type="button" className="seccion-plegable" onClick={() => alternar('conceptos')} aria-expanded={abierto('conceptos')}>
+              <span className="chevron">{abierto('conceptos') ? '▾' : '▸'}</span>
+              <span className="section-title">Conceptos por Disciplina</span>
+              {!abierto('conceptos') && (
+                <span className="resumen-plegado">{disciplines.reduce((n, d) => n + d.concepts.length, 0)} conceptos en {disciplines.length} disciplinas</span>
+              )}
+            </button>
+            <div className="flex gap-sm">
+              {abierto('conceptos') && <>
+                <button className="btn btn-outline btn-sm" onClick={() => todasDisciplinas(true)}>Desplegar todo</button>
+                <button className="btn btn-outline btn-sm" onClick={() => todasDisciplinas(false)}>Plegar todo</button>
+              </>}
               <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCSVFile} />
               <button className="btn btn-outline btn-sm" style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
                 onClick={() => setCsvModal(true)}>
@@ -750,8 +783,9 @@ export default function ProjectSetup() {
             </div>
           </div>
 
-          {disciplines.map(d => {
+          {abierto('conceptos') && disciplines.map(d => {
             const s = disciplineSubtotal(d, rates)
+            const abiertaD = abierto('d:' + d.id)
             const totalPct = d.concepts.reduce((sum, c) => sum + (parseFloat(c.pct) || 0), 0)
             const roundedPct = Math.round(totalPct * 10) / 10
             const advPct = disciplineAdvancePct(d, estimations)
@@ -759,8 +793,8 @@ export default function ProjectSetup() {
             return (
               <div key={d.id} className="discipline-block">
                 <div className="discipline-header">
-                  <div style={{ flex: 1 }}>
-                    <div className="discipline-name">{d.name}</div>
+                  <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => alternar('d:' + d.id)} role="button" aria-expanded={abiertaD}>
+                    <div className="discipline-name"><span className="chevron">{abiertaD ? '▾' : '▸'}</span> {d.name}</div>
                     <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--text-muted)' }}>
                       <span>Estimado: <strong style={{ color: 'var(--green-dark)' }}>{fmtPct(advPct)}</strong></span>
                       <div className="progress" style={{ flex: 1, maxWidth: 180 }}>
@@ -773,10 +807,11 @@ export default function ProjectSetup() {
                     <span>Estimable: <strong>{fmtMoney(s.conDesc, project.currency)}</strong></span>
                     <span>Conceptos: <strong>{d.concepts.length}</strong></span>
                     <button className="btn btn-outline btn-sm" onClick={() => equalizePercentages(d.id)}>⟳ % iguales</button>
-                    <button className="btn btn-outline btn-sm" onClick={() => addConcept(d.id)}>+ Concepto</button>
+                    <button className="btn btn-outline btn-sm" onClick={() => { addConcept(d.id); alternar('d:' + d.id, true) }}>+ Concepto</button>
                   </div>
                 </div>
 
+                {abiertaD && <>
                 <div className="table-wrap" style={{ border: 'none', borderRadius: 0 }}>
                   <table>
                     <thead>
@@ -850,6 +885,7 @@ export default function ProjectSetup() {
                       ? <span>Suma asignada: <strong style={{ color: 'var(--navy)' }}>{roundedPct}%</strong> &nbsp;·&nbsp; Disponible: <strong style={{ color: 'var(--green-dark)' }}>{Math.round((100 - roundedPct) * 10) / 10}%</strong></span>
                       : null}
                 </div>
+                </>}
               </div>
             )
           })}
