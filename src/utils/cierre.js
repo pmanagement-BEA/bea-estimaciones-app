@@ -118,3 +118,24 @@ export function periodoBorrador(estimaciones = [], hoy = new Date()) {
   }
   return periodoSiguiente(ultima, 0)
 }
+
+/**
+ * Mueve un periodo al mes elegido ('YYYY-MM') conservando su patrón de días
+ * (11 nov–10 dic → 11 dic–10 ene; un mes de calendario sigue siendo el mes completo).
+ */
+export function moverPeriodo(periodo, mes) {
+  const [y, m] = mes.split('-').map(Number)
+  if (!periodo?.period_from || !periodo?.period_to) {
+    return { period_from: `${y}-${pad(m)}-01`, period_to: `${y}-${pad(m)}-${pad(finDeMes(y, m - 1))}` }
+  }
+  const desde = fecha(periodo.period_from)
+  const n = (y - desde.getFullYear()) * 12 + (m - 1 - desde.getMonth())
+  if (desde.getDate() === 1) {
+    const hasta = fecha(periodo.period_to)
+    const meses = Math.max(0, (hasta.getFullYear() - desde.getFullYear()) * 12 + hasta.getMonth() - desde.getMonth())
+    const fin = new Date(y, m - 1 + meses, 1)
+    return { period_from: `${y}-${pad(m)}-01`, period_to: iso(new Date(fin.getFullYear(), fin.getMonth(), finDeMes(fin.getFullYear(), fin.getMonth()))) }
+  }
+  const siguiente = fecha(periodo.period_to); siguiente.setDate(siguiente.getDate() + 1)
+  return { period_from: iso(masMeses(desde, n)), period_to: iso(menosUnDia(masMeses(siguiente, n))) }
+}
