@@ -123,6 +123,12 @@ export default function Estimation() {
       }
     } else {
       est = allEsts.find(e => e.id === estId)
+      if (est?.status === 'Borrador' && allEsts.some(e => e.status === 'Enviada' && seEncima(e, est))) {
+        // Borrador encimado con un periodo ya enviado: pasa al periodo en turno
+        const periodo = periodoBorrador(allEsts)
+        await supabase.from('estimations').update(periodo).eq('id', est.id)
+        est = { ...est, ...periodo }
+      }
     }
 
     if (!est) { toast('Estimación no encontrada', true); setLoading(false); return }

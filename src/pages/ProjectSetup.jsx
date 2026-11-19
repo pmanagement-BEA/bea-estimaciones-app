@@ -5,7 +5,6 @@ import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtPct } from '../utils/format'
 import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS, projectPhase } from '../utils/calculations'
-import { nextNumber } from '../utils/aditivas'
 import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
 import { useAuth } from '../hooks/useAuth'
 
@@ -422,25 +421,9 @@ export default function ProjectSetup() {
     clearTimeout(saveTimer.current)
     await saveProject(project)
 
-    // Buscar o crear borrador
-    let draft = estimations.find(e => e.status === 'Borrador')
-    if (!draft) {
-      const now = new Date()
-      const y = now.getFullYear()
-      const m = now.getMonth()
-      const pad = n => String(n).padStart(2, '0')
-      const lastDay = new Date(y, m + 1, 0).getDate()
-      const period_from = `${y}-${pad(m + 1)}-01`
-      const period_to   = `${y}-${pad(m + 1)}-${pad(lastDay)}`
-      const number = nextNumber(estimations)
-
-      const { data, error } = await supabase.from('estimations')
-        .insert({ project_id: id, number, status: 'Borrador', period_from, period_to })
-        .select().single()
-      if (error) { toast('Error al crear estimación', true); return }
-      draft = data
-    }
-    navigate(`/projects/${id}/estimations/${draft.id}`)
+    // La estimación en curso: la página de la estimación busca el borrador o lo crea
+    // con el periodo en turno según el patrón del proyecto (p. ej. del 11 al 10)
+    navigate(`/projects/${id}/estimations/current`)
   }
 
   // ── UI helpers ─────────────────────────────────────────────────────────────
