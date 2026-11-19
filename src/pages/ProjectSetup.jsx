@@ -768,7 +768,7 @@ export default function ProjectSetup() {
                 <button className="btn btn-outline btn-sm" onClick={() => todasDisciplinas(false)}>Plegar todo</button>
               </>}
               <input ref={csvInputRef} type="file" accept=".csv" style={{ display: 'none' }} onChange={handleCSVFile} />
-              <button className="btn btn-outline btn-sm" style={{ color: 'var(--navy)', borderColor: 'var(--navy)' }}
+              <button className="btn btn-outline btn-sm"
                 onClick={() => setCsvModal(true)}>
                 📥 Cargar plantilla CSV
               </button>
