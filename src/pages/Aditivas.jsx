@@ -7,6 +7,7 @@ import { fmtMoney, fmtDate } from '../utils/format'
 import { incorporarAditivaAlContrato } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole } from '../lib/directorio'
+import { useAjeno } from '../hooks/useAjeno'
 
 const STATUS_STYLE = {
   Borrador:    { bg: 'var(--surface-2)',  color: 'var(--text-soft)',  border: 'var(--border-strong)' },
@@ -20,10 +21,11 @@ const ALL_STATUSES = ['Borrador', 'Enviada', 'Aceptada', 'Negada', 'Negociacion'
 export default function Aditivas() {
   const { id } = useParams()
   const { profile } = useAuth()
-  const soloLectura = isReadOnlyRole(profile)
   const navigate = useNavigate()
 
   const [project, setProject]   = useState(null)
+  const ajeno = useAjeno(project, profile)
+  const soloLectura = isReadOnlyRole(profile) || ajeno
   const [aditivas, setAditivas] = useState([])
   const [loading, setLoading]   = useState(true)
   const [modal, setModal]       = useState(null)

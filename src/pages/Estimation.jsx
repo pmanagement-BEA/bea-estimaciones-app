@@ -12,6 +12,7 @@ import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole, fetchDirectorio, fetchProjectMembers } from '../lib/directorio'
+import { useAjeno, AVISO_AJENO } from '../hooks/useAjeno'
 import { descargarReporteExcel, AREAS_REPORTE, ETIQUETA_AREA } from '../lib/reporteExcel'
 import LogoCliente, { leerLogoCliente } from '../components/LogoCliente'
 
@@ -53,7 +54,6 @@ function monthOptions(periodFrom, startDate, endDate) {
 export default function Estimation() {
   const { id, estId } = useParams()
   const { profile } = useAuth()
-  const soloLectura = isReadOnlyRole(profile)
   const navigate = useNavigate()
 
   const [project, setProject]         = useState(null)
@@ -72,6 +72,8 @@ export default function Estimation() {
   const [togglModal, setTogglModal]   = useState(null) // { rows: [] }
   const [areaStatus, setAreaStatus]   = useState({}) // { area: { listo_por, listo_nombre, listo_at } }
   const [perms, setPerms]             = useState({ todo: false, areas: new Set() })
+  const ajeno = useAjeno(project, profile)
+  const soloLectura = isReadOnlyRole(profile) || ajeno
   const areaStatusRef   = useRef({})
   const conceptosClienteRef = useRef([])
   const saveTimer       = useRef(null)
@@ -479,7 +481,7 @@ export default function Estimation() {
       {readonly && (
         <div className="readonly-banner no-print">
           <span>{soloLectura && estimation.status !== 'Enviada'
-            ? <>👁 Tienes acceso de <strong>solo lectura</strong> a esta estimación.</>
+            ? (ajeno ? <>👁 {AVISO_AJENO}</> : <>👁 Tienes acceso de <strong>solo lectura</strong> a esta estimación.</>)
             : <>📋 Esta estimación está marcada como <strong>{estimation.status}</strong> y no puede editarse.</>}</span>
           <button className="btn btn-sm btn-outline" onClick={() => navigate(`/projects/${id}/history`)}>Ver historial</button>
         </div>

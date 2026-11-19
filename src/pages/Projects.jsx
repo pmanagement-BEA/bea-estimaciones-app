@@ -15,7 +15,8 @@ export default function Projects() {
   const [loading, setLoading] = useState(true)
   const [mine, setMine] = useState({}) // { project_id: [rol] }
   const [onlyMine, setOnlyMine] = useState(true)
-  const isCoord = profile?.role === 'coordinador'
+  // Solo lectura (p. ej. Facturación) no está asignado a proyectos: de inicio ve todos
+  useEffect(() => { if (profile?.role === 'lectura') setOnlyMine(false) }, [profile?.role])
   const canCreate = !profile || ['lider', 'coordinador'].includes(profile.role)
 
   useEffect(() => { fetchProjects() }, [])
@@ -65,7 +66,7 @@ export default function Projects() {
           <div className="page-subtitle">Herramienta de estimación mensual · BEA</div>
         </div>
         <div className="flex" style={{ gap: 8, alignItems: 'center' }}>
-          {isCoord && (
+          {(
             <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
               <input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />
               Solo donde estoy asignado
@@ -84,7 +85,7 @@ export default function Projects() {
       ) : (
         <div className="project-grid">
           {projects
-            .filter(p => !(isCoord && onlyMine) || mine[p.id] || p.user_id === profile?.id)
+            .filter(p => !onlyMine || mine[p.id] || p.user_id === profile?.id)
             .map(p => {
             const totals = projectTotals(p.disciplines || [], projectRates(p))
             const advance = projectAdvancePct(p.disciplines || [], p.estimations || [], projectRates(p))

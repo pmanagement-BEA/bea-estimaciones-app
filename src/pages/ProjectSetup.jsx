@@ -7,6 +7,7 @@ import { fmtMoney, fmtPct } from '../utils/format'
 import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, disciplineArea, AREAS, projectPhase } from '../utils/calculations'
 import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
 import { useAuth } from '../hooks/useAuth'
+import { useAjeno, AVISO_AJENO } from '../hooks/useAjeno'
 
 // ── Parseo de CSV ─────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -66,7 +67,6 @@ const TEAM_ROLES = [
   ['cx','Agente de Comisionamiento (CX)'],
   ['me','Consultor de Modelación Energética'],
   ['consultor','Consultor de Consultoría LEED'],
-  ['coordinador','Coordinador de Proyecto'],
 ]
 // Genera las disciplinas + conceptos por defecto del machote BEA.
 // mesesF2 = meses de diseño (Fase 2), mesesF3 = meses de construcción (Fase 3 y CX)
@@ -173,9 +173,9 @@ export default function ProjectSetup() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const soloLectura = isReadOnlyRole(profile)
-
   const [project, setProject] = useState(null)
+  const ajeno = useAjeno(project, profile)
+  const soloLectura = isReadOnlyRole(profile) || ajeno
   const [disciplines, setDisciplines] = useState([])
   const [estimations, setEstimations] = useState([])
   const [loading, setLoading] = useState(true)
@@ -512,7 +512,7 @@ export default function ProjectSetup() {
       </div>
 
       {soloLectura && (
-        <div className="readonly-banner" style={{ marginBottom: 16 }}>👁 Tienes acceso de solo lectura a este proyecto.</div>
+        <div className="readonly-banner" style={{ marginBottom: 16 }}>👁 {ajeno ? AVISO_AJENO : 'Tienes acceso de solo lectura a este proyecto.'}</div>
       )}
       <fieldset disabled={soloLectura} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       {/* ── Datos Generales ────────────────────────────────────── */}
