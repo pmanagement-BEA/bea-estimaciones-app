@@ -49,6 +49,19 @@ function parseEstimacionCSV(text) {
   return disciplines
 }
 
+// Campo numérico que se ve con 2 decimales (11.764706 → 11.76) pero guarda el valor exacto
+// mientras nadie lo edite: así no cambian los montos que vienen de los libros.
+function Numero2({ value, onChange, ...props }) {
+  const [texto, setTexto] = useState(null)
+  const corto = value === null || value === undefined || value === '' ? '' : String(Math.round(Number(value) * 100) / 100)
+  return (
+    <input type="number" {...props} value={texto ?? corto}
+      onFocus={() => setTexto(corto)}
+      onChange={e => { setTexto(e.target.value); onChange(e) }}
+      onBlur={() => setTexto(null)} />
+  )
+}
+
 // ── Listas de opciones ──────────────────────────────────────────────────────
 // Tipos de servicio según la clave del proyecto (ver migracion/CLAVES_DE_PROYECTO.md).
 // Los genéricos ('LEED BD+C', 'EDGE'…) se conservan para proyectos que aún no tienen subtipo.
@@ -637,12 +650,12 @@ export default function ProjectSetup() {
               onChange={e => setProjectField('meses_fase3', parseInt(e.target.value) || 18)} />
           </Field>
           <Field label="Anticipo (% del importe con descuento)">
-            <input type="number" min="0" max="100" step="0.01" value={rates.anticipoPct} disabled={!hasRateColumns}
+            <Numero2 min="0" max="100" step="0.01" value={rates.anticipoPct} disabled={!hasRateColumns}
               title={hasRateColumns ? '' : 'Falta correr la migración de la base de datos'}
               onChange={e => setProjectField('anticipo_pct', parseFloat(e.target.value) || 0)} />
           </Field>
           <Field label="Finiquito (% retenido hasta certificación)">
-            <input type="number" min="0" max="100" step="0.01" value={rates.finiquitoPct} disabled={!hasRateColumns}
+            <Numero2 min="0" max="100" step="0.01" value={rates.finiquitoPct} disabled={!hasRateColumns}
               title={hasRateColumns ? '' : 'Falta correr la migración de la base de datos'}
               onChange={e => setProjectField('finiquito_pct', parseFloat(e.target.value) || 0)} />
           </Field>
@@ -776,7 +789,7 @@ export default function ProjectSetup() {
                           onChange={e => saveDisciplineField(d.id, 'monto_total', parseFloat(e.target.value) || 0)} />
                       </td>
                       <td className="num">
-                        <input type="number" step="0.01"
+                        <Numero2 step="0.01"
                           value={d.descuento}
                           onChange={e => saveDisciplineField(d.id, 'descuento', parseFloat(e.target.value) || 0)} />
                       </td>
