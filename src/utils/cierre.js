@@ -112,6 +112,11 @@ export function periodoBorrador(estimaciones = [], hoy = new Date()) {
     return { period_from: `${y}-${pad(m + 1)}-01`, period_to: `${y}-${pad(m + 1)}-${pad(finDeMes(y, m))}` }
   }
   const ultima = [...enviadas].sort((a, b) => (b.number || 0) - (a.number || 0) || (b.period_to > a.period_to ? 1 : -1))[0]
+  if (ultima.enviada_at) {
+    // Empieza el día en que se envió la anterior; el fin se fija al enviar (mientras, un mes después)
+    const ini = fecha(fechaLocal(ultima.enviada_at))
+    return { period_from: iso(ini), period_to: iso(menosUnDia(masMeses(ini, 1))) }
+  }
   for (let k = 0; k < 240; k++) {
     const p = periodoSiguiente(ultima, k)
     if (p.period_to >= hoyIso && !enviadas.some(e => seEncima(e, p))) return p
@@ -138,4 +143,22 @@ export function moverPeriodo(periodo, mes) {
   }
   const siguiente = fecha(periodo.period_to); siguiente.setDate(siguiente.getDate() + 1)
   return { period_from: iso(masMeses(desde, n)), period_to: iso(menosUnDia(masMeses(siguiente, n))) }
+}
+
+/** Fecha local 'YYYY-MM-DD' de un timestamp (p. ej. enviada_at). */
+export const fechaLocal = ts => iso(new Date(ts))
+
+/**
+ * Inicio del periodo de una estimación: el día en que se envió la estimación anterior.
+ * Si la anterior no tiene fecha de envío guardada (las importadas de los libros), el día después de su fin.
+ * Devuelve null si no hay estimación anterior enviada.
+ */
+export function inicioDelPeriodo(estimaciones, numero) {
+  const previa = estimaciones.filter(e => e.status === 'Enviada' && (e.number || 0) < numero)
+    .sort((a, b) => (b.number || 0) - (a.number || 0))[0]
+  if (!previa) return null
+  if (previa.enviada_at) return fechaLocal(previa.enviada_at)
+  if (!previa.period_to) return null
+  const d = fecha(previa.period_to); d.setDate(d.getDate() + 1)
+  return iso(d)
 }
