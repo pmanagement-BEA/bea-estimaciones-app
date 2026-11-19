@@ -244,5 +244,6 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 /* Secciones plegables (Configuración del proyecto) */
 .seccion-plegable{display:flex;align-items:center;gap:8px;background:none;border:0;padding:0;cursor:pointer;font:inherit;color:inherit;text-align:left;flex-wrap:wrap}
 .seccion-plegable:hover .section-title{color:var(--green-dark)}
-.chevron{display:inline-block;width:14px;color:var(--text-muted);font-size:12px}
+.chevron{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--green-soft);color:var(--green-dark);font-size:14px;line-height:1;flex-shrink:0}
+.section-header.plegada{margin-bottom:0;padding-bottom:0;border-bottom:0}
 .resumen-plegado{font-size:12px;font-weight:400;color:var(--text-muted)}

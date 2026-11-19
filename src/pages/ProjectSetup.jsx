@@ -658,7 +658,7 @@ export default function ProjectSetup() {
 
       {/* ── Disciplinas ───────────────────────────────────────── */}
       <div className="card mb-md">
-        <div className="section-header">
+        <div className={`section-header${!abierto('montos') && disciplines.length > 0 ? ' plegada' : ''}`}>
           <button type="button" className="seccion-plegable" onClick={() => alternar('montos')} aria-expanded={abierto('montos')}>
             <span className="chevron">{abierto('montos') ? '▾' : '▸'}</span>
             <span className="section-title">Montos por Disciplina</span>
