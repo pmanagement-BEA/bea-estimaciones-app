@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS, disciplineArea } from '../utils/calculations'
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
-import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo } from '../utils/cierre'
+import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo, inicioDelPeriodo, fechaLocal } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
@@ -135,6 +135,16 @@ export default function Estimation() {
 
     if (!est) { toast('Estimación no encontrada', true); setLoading(false); return }
 
+    // El inicio del periodo es fijo: el día en que se envió la estimación anterior
+    if (est.status === 'Borrador') {
+      const inicio = inicioDelPeriodo(allEsts, est.number)
+      if (inicio && inicio !== est.period_from) {
+        const cambio = { period_from: inicio, ...(est.period_to && est.period_to >= inicio ? {} : { period_to: inicio }) }
+        await supabase.from('estimations').update(cambio).eq('id', est.id)
+        est = { ...est, ...cambio }
+      }
+    }
+
     // Construir mapa de items por concept_id
     const itemMap = {}
     ;(est.estimation_items || []).forEach(item => { itemMap[item.concept_id] = item })
@@ -244,13 +254,17 @@ export default function Estimation() {
     for (const [cid, item] of Object.entries(items)) {
       if (item.included) await upsertItem(estimation.id, cid, item)
     }
-    const { error } = await supabase.from('estimations').update({ status: 'Enviada' }).eq('id', estimation.id)
+    // El periodo termina el día en que se envía (y queda fijo)
+    const ahora = new Date()
+    const envio = { status: 'Enviada', enviada_at: ahora.toISOString(), period_to: fechaLocal(ahora) }
+    if (envio.period_to < estimation.period_from) envio.period_to = estimation.period_from
+    const { error } = await supabase.from('estimations').update(envio).eq('id', estimation.id)
     setSaving(false)
     if (error) { toast('Error al marcar como enviada', true); return }
-    setEstimation(prev => ({ ...prev, status: 'Enviada' }))
+    setEstimation(prev => ({ ...prev, ...envio }))
     toast('Estimación marcada como Enviada ✓')
     // La estimación en formato del cliente queda como plantilla del mes siguiente
-    const errores = await avanzarFormatos(project, conceptosClienteRef.current, { from: estimation.period_from, to: estimation.period_to })
+    const errores = await avanzarFormatos(project, conceptosClienteRef.current, { from: estimation.period_from, to: envio.period_to })
     if (errores.length) toast('No se actualizó el formato del cliente: ' + errores.join(' · '), true)
   }
 
@@ -436,7 +450,12 @@ export default function Estimation() {
   const corte = corteDeEstimacion(estimation.period_from, estimation.period_to)
   const puedeMarcar = a => !readonly && (perms.todo || perms.areas.has(a))
   const puedeEditar = d => !readonly && (perms.todo || perms.areas.has(disciplineArea(d)))
-  const hoja = armarHoja({ project, estimation, disciplines, items, summary, rates })
+  // Para los documentos (hoja BEA, formato del cliente): mientras sea borrador, el periodo termina hoy,
+  // que es cuando se imprime y se envía; ya enviada, su fecha de envío.
+  const hoyIso = fechaLocal(new Date())
+  const estDocs = estimation.status === 'Enviada' ? estimation
+    : { ...estimation, period_to: estimation.period_from && hoyIso < estimation.period_from ? estimation.period_from : hoyIso }
+  const hoja = armarHoja({ project, estimation: estDocs, disciplines, items, summary, rates })
   // Conceptos para llenar el formato propio del cliente (Tec, STIVA…)
   const conceptosCliente = disciplines.flatMap(d => (d.concepts || []).map(c => {
     const monto = amountOf(c, d)
@@ -444,7 +463,7 @@ export default function Estimation() {
       anterior: monto > 0 ? (acumMap[c.id] || 0) / monto : 0,
       esta: monto > 0 ? thisEstAmount(items[c.id], c, d) / monto : 0 }
   }))
-  const periodo = { from: estimation.period_from, to: estimation.period_to }
+  const periodo = { from: estDocs.period_from, to: estDocs.period_to }
   conceptosClienteRef.current = conceptosCliente
 
   async function toggleArea(a) {
@@ -563,14 +582,14 @@ export default function Estimation() {
         <div className={readonly ? 'readonly' : ''}>
           {/* Periodo */}
           <div className="card mb-md">
-            <div className="grid grid-4">
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}>
               <div className="field">
                 <label>Número de estimación</label>
                 <input value={estimation.number} disabled />
               </div>
               <div className="field">
                 <label>Mes de estimación</label>
-                <select disabled={readonly} value={monthOpts.find(o => o.selected)?.value || ''} onChange={e => changeMonth(e.target.value)} style={{ fontSize: 13 }}>
+                <select disabled value={monthOpts.find(o => o.selected)?.value || ''} onChange={e => changeMonth(e.target.value)} style={{ fontSize: 13 }} title="Sale del inicio del periodo">
                   <option value="">— Seleccionar mes —</option>
                   {monthOpts.map(o => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -578,8 +597,16 @@ export default function Estimation() {
                 </select>
               </div>
               <div className="field">
-                <label>Periodo</label>
-                <input value={estimation.period_from ? `${fmtDate(estimation.period_from)} — ${fmtDate(estimation.period_to)}` : '—'} disabled />
+                <label>Inicio del periodo 🔒</label>
+                <input value={estimation.period_from ? fmtDate(estimation.period_from) : '—'} disabled
+                  title="Fecha en que se envió la estimación anterior" />
+              </div>
+              <div className="field">
+                <label>Fin del periodo{estimation.status === 'Enviada' ? ' 🔒' : ''}</label>
+                <input value={estimation.status === 'Enviada'
+                  ? (estimation.period_to ? fmtDate(estimation.period_to) : '—')
+                  : 'Se fija al enviar'} disabled
+                  title={estimation.status === 'Enviada' ? 'Fecha en que se envió esta estimación' : 'Se pone sola con la fecha del día en que se marque como Enviada'} />
               </div>
               <div className="field">
                 <label>Estado</label>

@@ -37,7 +37,7 @@ export default function History() {
   }
 
   async function revertToBorrador(estId) {
-    const { error } = await supabase.from('estimations').update({ status: 'Borrador' }).eq('id', estId)
+    const { error } = await supabase.from('estimations').update({ status: 'Borrador', enviada_at: null }).eq('id', estId)
     if (error) { toast('Error al revertir', true); return }
     setEstimations(prev => prev.map(e => e.id === estId ? { ...e, status: 'Borrador' } : e))
     toast('Estimación revertida a Borrador ✓')
