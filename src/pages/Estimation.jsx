@@ -11,7 +11,12 @@ import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaClient
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
-import { isReadOnlyRole } from '../lib/directorio'
+import { isReadOnlyRole, fetchDirectorio, fetchProjectMembers } from '../lib/directorio'
+import { descargarReporteExcel, AREAS_REPORTE, ETIQUETA_AREA } from '../lib/reporteExcel'
+
+// Lo que pasa del reporte anterior al nuevo: lo que sigue vigente (lo realizado en el mes empieza vacío)
+const CAMPOS_HEREDADOS = ['acciones_pendientes', 'informacion_pendiente', 'riesgos', 'no_riesgos', 'entregables', 'resumen_proyecto',
+  'fase_texto', 'estado_proyecto', 'inicio_fase', 'fin_fase', 'inicio_contrato', 'fin_contrato', 'avance_documental', 'cliente_responsable', 'nota_info_pendiente']
 
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
@@ -61,6 +66,8 @@ export default function Estimation() {
   const [modal, setModal]             = useState(null)
   const [reportData, setReportData]   = useState(null)
   const [reportSaving, setReportSaving] = useState(false)
+  const [reportHeredado, setReportHeredado] = useState(null) // número de la estimación de la que se copió
+  const [equipo, setEquipo]           = useState({})
   const [togglModal, setTogglModal]   = useState(null) // { rows: [] }
   const [areaStatus, setAreaStatus]   = useState({}) // { area: { listo_por, listo_nombre, listo_at } }
   const [perms, setPerms]             = useState({ todo: false, areas: new Set() })
@@ -68,6 +75,7 @@ export default function Estimation() {
   const conceptosClienteRef = useRef([])
   const saveTimer       = useRef(null)
   const reportSaveTimer = useRef(null)
+  const reportInsert    = useRef(null)
   const reportRef       = useRef(null)
   const togglFileRef    = useRef(null)
 
@@ -129,9 +137,30 @@ export default function Estimation() {
     }
 
     const rdRes = await supabase.from('report_data').select('*').eq('estimation_id', est.id).maybeSingle()
-    const rd = rdRes.data || null
+    let rd = rdRes.data || null
+    let heredado = null
+    if (!rd) {
+      // Reporte nuevo: arranca con lo que sigue vigente del reporte anterior (lo realizado sí empieza vacío)
+      const previa = allEsts.filter(e => e.number < est.number).sort((a, b) => b.number - a.number)
+      if (previa.length) {
+        const { data: prev } = await supabase.from('report_data').select('*').in('estimation_id', previa.slice(0, 3).map(e => e.id))
+        const base = previa.map(e => (prev || []).find(r => r.estimation_id === e.id)).find(Boolean)
+        if (base) {
+          heredado = previa.find(e => e.id === base.estimation_id).number
+          rd = Object.fromEntries(CAMPOS_HEREDADOS.map(k => [k, base[k]]).filter(([, v]) => v != null))
+        }
+      }
+    }
+    setReportHeredado(heredado)
     setReportData(rd)
     reportRef.current = rd
+
+    const [dir, mem] = await Promise.all([fetchDirectorio(), fetchProjectMembers(id)])
+    const nombre = rol => {
+      const email = (mem.byRol[rol] || [])[0]
+      return (email && (dir.data.find(p => p.email === email)?.nombre || email)) || (projRes.data?.team || {})[rol] || ''
+    }
+    setEquipo({ lider: nombre('lider'), cx: nombre('cx'), me: nombre('me') })
 
     const estado = await fetchEstadoAreas(est.id)
     areaStatusRef.current = estado
@@ -229,27 +258,45 @@ export default function Estimation() {
 
   async function flushReportSave(data) {
     setReportSaving(true)
+    // Si el primer guardado (insert) sigue en curso, espera a que termine para no crear dos reportes
+    if (!data.id && reportInsert.current) { await reportInsert.current; data = { ...data, id: reportRef.current?.id } }
     if (data.id) {
-      await supabase.from('report_data').update(data).eq('id', data.id)
+      const { error } = await supabase.from('report_data').update(data).eq('id', data.id)
+      if (error) toast('No se guardó el reporte: ' + error.message, true)
     } else {
-      const { data: created } = await supabase.from('report_data')
-        .insert({ estimation_id: estimation.id, ...data }).select().single()
-      if (created) { setReportData(created); reportRef.current = created }
+      reportInsert.current = supabase.from('report_data')
+        .insert({ estimation_id: estimation.id, ...data }).select('id').single()
+      const { data: created, error } = await reportInsert.current
+      reportInsert.current = null
+      if (error) toast('No se guardó el reporte: ' + error.message, true)
+      if (created) {
+        // Conserva lo que se haya escrito mientras se guardaba
+        reportRef.current = { ...(reportRef.current || {}), id: created.id }
+        setReportData(reportRef.current)
+        setReportHeredado(null)
+      }
     }
     setReportSaving(false)
   }
 
   function addReportRow(key) {
     const defaults = {
-      acciones_realizadas:   { task: '', descripcion: '', fecha: '' },
+      acciones_realizadas:   { task: '', descripcion: '', fecha: '', area: areaPropia() },
       acciones_pendientes:   { accion: '', fecha: '', responsable: 'BEA' },
       informacion_pendiente: { texto: '', responsable: 'BEA' },
       riesgos:               { riesgo: '', creditos: '' },
       entregables:           { texto: '' },
+      resumen_proyecto:      { hito: '', fecha: '' },
     }
     const newRow = { id: crypto.randomUUID(), ...(defaults[key] || {}) }
     const arr = [...(reportRef.current?.[key] || []), newRow]
     scheduleReportSave({ [key]: arr })
+  }
+
+  // Área con la que arrancan las acciones nuevas: la de la persona (si solo tiene una), si no Consultoría
+  function areaPropia() {
+    const mias = [...(perms.areas || [])]
+    return mias.length === 1 ? mias[0] : 'Consultoría'
   }
 
   function removeReportRow(key, rowId) {
@@ -334,7 +381,7 @@ export default function Estimation() {
     })
     const newRows = []
     taskMap.forEach((descs, task) => {
-      newRows.push({ id: crypto.randomUUID(), task, descripcion: descs.join('\n'), fecha: '' })
+      newRows.push({ id: crypto.randomUUID(), task, descripcion: descs.join('\n'), fecha: '', area: areaPropia() })
     })
     const existing = (reportRef.current?.acciones_realizadas || []).filter(r => (r.task || '').trim())
     scheduleReportSave({ acciones_realizadas: [...existing, ...newRows] })
@@ -834,6 +881,15 @@ export default function Estimation() {
         const rpt = reportData || {}
         const reportReadonly = estimation.report_sent === true || soloLectura
         const rd = key => rpt[key] || []
+        const mesReporteTxt = estimation.period_from ? `${MESES[Number(estimation.period_from.slice(5, 7)) - 1]} ${estimation.period_from.slice(0, 4)}` : '—'
+        // Acciones agrupadas por área (Consultoría, Comisionamiento, Modelado energético), como en el formato
+        const ordenArea = Object.fromEntries(AREAS_REPORTE.map(([a], i) => [a, i]))
+        const accionesOrdenadas = rd('acciones_realizadas').map((r, i) => [r, i])
+          .sort((x, y) => (ordenArea[x[0].area || 'Consultoría'] - ordenArea[y[0].area || 'Consultoría']) || x[1] - y[1]).map(x => x[0])
+        const bajarReporteExcel = () => descargarReporteExcel({
+          proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, equipo,
+          rpt: { ...rpt, inicio_contrato: rpt.inicio_contrato || project.start_date, fin_contrato: rpt.fin_contrato || project.end_date },
+        }).catch(err => toast('No se pudo generar el Excel: ' + err.message, true))
 
         return (
           <div className={reportReadonly ? 'readonly' : ''}>
@@ -842,7 +898,16 @@ export default function Estimation() {
             {reportReadonly && (
               <div className="readonly-banner" style={{ background: 'var(--green-soft)', color: 'var(--green-dark)', borderColor: '#86EFAC' }}>
                 <span>📋 Reporte marcado como <strong>Enviado</strong> el {fmtDate((estimation.report_sent_at || '').slice(0, 10))}. Solo lectura.</span>
-                <button className="btn btn-sm btn-outline" onClick={() => window.print()}>📄 Imprimir / PDF</button>
+                <span className="flex" style={{ gap: 6 }}>
+                  <button className="btn btn-sm btn-outline" onClick={bajarReporteExcel}>⬇ Excel RC-OP-01</button>
+                  <button className="btn btn-sm btn-outline" onClick={() => window.print()}>📄 Imprimir / PDF</button>
+                </span>
+              </div>
+            )}
+
+            {reportHeredado && !reportReadonly && (
+              <div className="readonly-banner no-print" style={{ background: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }}>
+                <span>Se copió del reporte de la estimación #{String(reportHeredado).padStart(3, '0')} lo que sigue vigente: encabezado, pendientes, información pendiente, riesgos, entregables y resumen. Revísalo y actualízalo; las acciones del mes empiezan vacías.</span>
               </div>
             )}
 
@@ -853,10 +918,36 @@ export default function Estimation() {
                 <div className="field"><label>Proyecto</label><input value={project.name} disabled /></div>
                 <div className="field"><label>Cliente</label><input value={project.client} disabled /></div>
                 <div className="field"><label>Ubicación</label><input value={project.location || '—'} disabled /></div>
-                <div className="field"><label>Líder de Proyecto</label><input value={project.team_leader || '—'} disabled /></div>
-                <div className="field"><label>Periodo</label><input value={estimation.period_from ? `${fmtDate(estimation.period_from)} — ${fmtDate(estimation.period_to)}` : '—'} disabled /></div>
+                <div className="field"><label>Mes</label><input value={mesReporteTxt} disabled /></div>
                 <div className="field"><label>Estimación</label><input value={`#${String(estimation.number).padStart(3, '0')}`} disabled /></div>
+                <div className="field"><label>% global de avance documental</label>
+                  <input type="number" min="0" max="100" step="0.1" value={rpt.avance_documental ?? ''} readOnly={reportReadonly} placeholder="0 – 100"
+                    onChange={e => scheduleReportSave({ avance_documental: e.target.value === '' ? null : Math.min(100, Math.max(0, Number(e.target.value))) })} /></div>
+                <div className="field"><label>Fase</label>
+                  <input value={rpt.fase_texto ?? ''} readOnly={reportReadonly} placeholder={project.phase ? `p. ej. ${project.phase}` : 'p. ej. Diseño / Construcción'}
+                    onChange={e => scheduleReportSave({ fase_texto: e.target.value })} /></div>
+                <div className="field"><label>Estado de proyecto</label>
+                  <input value={rpt.estado_proyecto ?? ''} readOnly={reportReadonly} placeholder="p. ej. En tiempo / Con atraso"
+                    onChange={e => scheduleReportSave({ estado_proyecto: e.target.value })} /></div>
+                <div className="field"><label>Cliente responsable</label>
+                  <input value={rpt.cliente_responsable ?? ''} readOnly={reportReadonly} placeholder={project.client_contact_name || 'Nombre del contacto'}
+                    onChange={e => scheduleReportSave({ cliente_responsable: e.target.value })} /></div>
+                <div className="field"><label>Inicio de fase</label>
+                  <input type="date" value={rpt.inicio_fase || ''} readOnly={reportReadonly} onChange={e => scheduleReportSave({ inicio_fase: e.target.value || null })} /></div>
+                <div className="field"><label>Finalización de fase</label>
+                  <input type="date" value={rpt.fin_fase || ''} readOnly={reportReadonly} onChange={e => scheduleReportSave({ fin_fase: e.target.value || null })} /></div>
+                <div className="field"><label>Inicio de contrato</label>
+                  <input type="date" value={rpt.inicio_contrato || project.start_date || ''} readOnly={reportReadonly} onChange={e => scheduleReportSave({ inicio_contrato: e.target.value || null })} /></div>
+                <div className="field"><label>Finalización de contrato</label>
+                  <input type="date" value={rpt.fin_contrato || project.end_date || ''} readOnly={reportReadonly} onChange={e => scheduleReportSave({ fin_contrato: e.target.value || null })} /></div>
               </div>
+              <div className="section-title" style={{ fontSize: 13, margin: '14px 0 6px' }}>Distribución</div>
+              <div className="grid grid-3">
+                <div className="field"><label>Líder de proyecto</label><input value={equipo.lider || '—'} disabled /></div>
+                <div className="field"><label>Autoridad Cx</label><input value={equipo.cx || '—'} disabled /></div>
+                <div className="field"><label>Modelación energética</label><input value={equipo.me || '—'} disabled /></div>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }} className="no-print">El equipo sale de la tarjeta del proyecto (Configuración → Equipo).</div>
             </div>
 
             {/* Acciones Realizadas */}
@@ -875,6 +966,7 @@ export default function Estimation() {
                 <thead>
                   <tr>
                     <th className="row-num">N°</th>
+                    <th style={{ width: 150 }}>Área</th>
                     <th style={{ width: 180 }}>Tarea (Task)</th>
                     <th>Descripción</th>
                     <th style={{ width: 120 }}>Fecha (opcional)</th>
@@ -883,12 +975,19 @@ export default function Estimation() {
                 </thead>
                 <tbody>
                   {rd('acciones_realizadas').length === 0
-                    ? <tr><td colSpan={reportReadonly ? 4 : 5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin acciones registradas</td></tr>
-                    : rd('acciones_realizadas').map((row, i) => {
+                    ? <tr><td colSpan={reportReadonly ? 5 : 6} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin acciones registradas</td></tr>
+                    : accionesOrdenadas.map((row, i) => {
                         const lines = (row.descripcion || '').split('\n').filter(l => l.trim())
                         return (
                           <tr key={row.id}>
                             <td className="row-num">{i + 1}</td>
+                            <td>
+                              {reportReadonly
+                                ? <span style={{ fontSize: 12 }}>{ETIQUETA_AREA[row.area || 'Consultoría']}</span>
+                                : <select value={row.area || 'Consultoría'} onChange={e => updateReportRow('acciones_realizadas', row.id, 'area', e.target.value)}>
+                                    {AREAS_REPORTE.map(([a]) => <option key={a} value={a}>{ETIQUETA_AREA[a]}</option>)}
+                                  </select>}
+                            </td>
                             <td><input value={row.task || ''} readOnly={reportReadonly} onChange={e => updateReportRow('acciones_realizadas', row.id, 'task', e.target.value)} /></td>
                             <td>
                               {reportReadonly
@@ -989,6 +1088,14 @@ export default function Estimation() {
                       })}
                 </tbody>
               </table>
+              {(!reportReadonly || (rpt.nota_info_pendiente || '').trim()) && (
+                <div className="field" style={{ marginTop: 10 }}>
+                  <label>Nota general</label>
+                  <textarea value={rpt.nota_info_pendiente || ''} readOnly={reportReadonly} rows={2} placeholder="Comentario general sobre la información pendiente (opcional)"
+                    style={{ width: '100%', padding: '6px 8px', border: '1px solid var(--border)', borderRadius: 4, fontFamily: 'inherit', fontSize: 12, resize: 'vertical' }}
+                    onChange={e => scheduleReportSave({ nota_info_pendiente: e.target.value })} />
+                </div>
+              )}
             </div>
 
             {/* Riesgos */}
@@ -1014,7 +1121,7 @@ export default function Estimation() {
                       <tr>
                         <th className="row-num">N°</th>
                         <th>Riesgo</th>
-                        <th style={{ width: 180 }}>Créditos en riesgo</th>
+                        <th style={{ width: 220 }}>Prerrequisitos / créditos en incumplimiento</th>
                         {!reportReadonly && <th className="row-actions"></th>}
                       </tr>
                     </thead>
@@ -1054,12 +1161,46 @@ export default function Estimation() {
               </table>
             </div>
 
+            {/* Resumen del proyecto */}
+            <div className="card mb-md">
+              <div className="section-header">
+                <div>
+                  <div className="section-title">Resumen del Proyecto</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Hitos del proyecto con su fecha. Se acumulan mes con mes.</div>
+                </div>
+                {!reportReadonly && <button className="btn btn-outline btn-sm" onClick={() => addReportRow('resumen_proyecto')}>+ Hito</button>}
+              </div>
+              <table className="mini-table">
+                <thead>
+                  <tr>
+                    <th className="row-num">N°</th>
+                    <th>Hito</th>
+                    <th style={{ width: 140 }}>Fecha</th>
+                    {!reportReadonly && <th className="row-actions"></th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rd('resumen_proyecto').length === 0
+                    ? <tr><td colSpan={reportReadonly ? 3 : 4} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 14 }}>Sin hitos registrados</td></tr>
+                    : rd('resumen_proyecto').map((row, i) => (
+                        <tr key={row.id}>
+                          <td className="row-num">{i + 1}</td>
+                          <td><input value={row.hito || ''} readOnly={reportReadonly} onChange={e => updateReportRow('resumen_proyecto', row.id, 'hito', e.target.value)} /></td>
+                          <td><input type="date" value={row.fecha || ''} readOnly={reportReadonly} onChange={e => updateReportRow('resumen_proyecto', row.id, 'fecha', e.target.value)} /></td>
+                          {!reportReadonly && <td className="row-actions"><button className="btn btn-ghost btn-xs" onClick={() => removeReportRow('resumen_proyecto', row.id)}>✕</button></td>}
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
+            </div>
+
             {/* Barra de acciones */}
             {!reportReadonly && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginTop: 24, paddingTop: 16, borderTop: '2px solid var(--green)' }} className="no-print">
                 <span className={`status-pill${reportSaving ? ' dirty' : ''}`}>{reportSaving ? 'Guardando...' : 'Guardado'}</span>
                 <div className="flex" style={{ gap: 8 }}>
                   <button className="btn btn-outline" onClick={() => toast('Borrador guardado ✓')}>Guardar borrador</button>
+                  <button className="btn btn-outline" onClick={bajarReporteExcel}>⬇ Excel RC-OP-01</button>
                   <button className="btn btn-dark" onClick={() => window.print()}>📄 Generar PDF</button>
                   <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={() => setModal({
                     title: '✉ Marcar Reporte como Enviado',
