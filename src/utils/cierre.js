@@ -35,8 +35,16 @@ export function fechaCorte(year, month) {
   return d
 }
 
-/** Corte del mes al que pertenece una estimación (por su period_from 'YYYY-MM-DD'). */
-export function corteDeEstimacion(periodFrom) {
+/**
+ * Corte de una estimación: el último día de su periodo o, si es inhábil, el día hábil anterior.
+ * (Para periodos de mes de calendario es el último día hábil del mes.) Sin period_to, el del mes de period_from.
+ */
+export function corteDeEstimacion(periodFrom, periodTo) {
+  if (periodTo) {
+    const d = fecha(periodTo)
+    while (!esHabil(d)) d.setDate(d.getDate() - 1)
+    return d
+  }
   const [y, m] = (periodFrom || iso(new Date())).split('-').map(Number)
   return fechaCorte(y, m - 1)
 }
@@ -60,14 +68,53 @@ export function textoCorte(corte, hoy = new Date()) {
   return `venció hace ${-n} día${n === -1 ? '' : 's'}`
 }
 
+const fecha = t => { const [y, m, d] = t.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d) }
+const finDeMes = (y, m) => new Date(y, m + 1, 0).getDate()
+// Suma meses conservando el día (si el mes no tiene ese día, el último del mes)
+function masMeses(d, n) {
+  const y = d.getFullYear(), m = d.getMonth() + n
+  return new Date(y, m, Math.min(d.getDate(), finDeMes(y, m)))
+}
+const menosUnDia = d => new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)
+
 /**
- * Mes del borrador: el mes en turno (puede haber meses sin estimar), salvo que ese
- * mes ya tenga una estimación enviada; entonces el siguiente. Devuelve { period_from, period_to }.
+ * Siguiente periodo según el patrón del proyecto (el de su última estimación enviada):
+ * - si estima por mes de calendario (empieza el día 1): el mes completo siguiente;
+ * - si no (p. ej. del 11 al 10): empieza el día después de donde terminó y dura un mes.
+ * `saltar` = cuántos periodos más adelante (meses sin estimar).
+ */
+export function periodoSiguiente(ultima, saltar = 0) {
+  const desde0 = fecha(ultima.period_from), hasta0 = fecha(ultima.period_to)
+  if (desde0.getDate() === 1) {
+    const y = hasta0.getFullYear(), m = hasta0.getMonth() + 1 + saltar
+    const ini = new Date(y, m, 1)
+    return { period_from: iso(ini), period_to: iso(new Date(ini.getFullYear(), ini.getMonth(), finDeMes(ini.getFullYear(), ini.getMonth()))) }
+  }
+  const base = new Date(hasta0.getFullYear(), hasta0.getMonth(), hasta0.getDate() + 1)
+  const ini = masMeses(base, saltar)
+  return { period_from: iso(ini), period_to: iso(menosUnDia(masMeses(base, saltar + 1))) }
+}
+
+/** ¿Se enciman dos periodos? */
+export const seEncima = (a, b) => !!(a?.period_from && a?.period_to && b?.period_from && b?.period_to) &&
+  a.period_from <= b.period_to && a.period_to >= b.period_from
+
+/**
+ * Periodo del borrador: el periodo en turno según el patrón del proyecto (puede haber meses sin
+ * estimar: se salta hasta el periodo que incluye hoy); nunca uno que ya tenga una estimación enviada.
+ * Sin estimaciones enviadas: el mes de calendario en curso. Devuelve { period_from, period_to }.
  */
 export function periodoBorrador(estimaciones = [], hoy = new Date()) {
-  let y = hoy.getFullYear(), m = hoy.getMonth()
-  const enviados = new Set(estimaciones.filter(e => e.status === 'Enviada' && e.period_from).map(e => e.period_from.slice(0, 7)))
-  while (enviados.has(`${y}-${pad(m + 1)}`)) { m++; if (m > 11) { m = 0; y++ } }
-  const ultimo = new Date(y, m + 1, 0).getDate()
-  return { period_from: `${y}-${pad(m + 1)}-01`, period_to: `${y}-${pad(m + 1)}-${pad(ultimo)}` }
+  const enviadas = estimaciones.filter(e => e.status === 'Enviada' && e.period_from && e.period_to)
+  const hoyIso = iso(hoy)
+  if (!enviadas.length) {
+    const y = hoy.getFullYear(), m = hoy.getMonth()
+    return { period_from: `${y}-${pad(m + 1)}-01`, period_to: `${y}-${pad(m + 1)}-${pad(finDeMes(y, m))}` }
+  }
+  const ultima = [...enviadas].sort((a, b) => (b.number || 0) - (a.number || 0) || (b.period_to > a.period_to ? 1 : -1))[0]
+  for (let k = 0; k < 240; k++) {
+    const p = periodoSiguiente(ultima, k)
+    if (p.period_to >= hoyIso && !enviadas.some(e => seEncima(e, p))) return p
+  }
+  return periodoSiguiente(ultima, 0)
 }

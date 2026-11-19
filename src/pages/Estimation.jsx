@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS, disciplineArea } from '../utils/calculations'
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
-import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador } from '../utils/cierre'
+import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
@@ -106,9 +106,9 @@ export default function Estimation() {
     if (estId === 'current') {
       est = allEsts.find(e => e.status === 'Borrador')
       const periodo = periodoBorrador(allEsts)
-      const mesYaEnviado = est && allEsts.some(e => e.status === 'Enviada' && (e.period_from || '').slice(0, 7) === (est.period_from || '').slice(0, 7))
+      const mesYaEnviado = est && allEsts.some(e => e.status === 'Enviada' && seEncima(e, est))
       if (mesYaEnviado) {
-        // El borrador quedó en un mes que ya se envió: pasa al mes en turno (si el líder eligió otro mes a mano, se respeta)
+        // El borrador quedó encimado con un periodo ya enviado: pasa al periodo en turno (si el líder eligió otro a mano, se respeta)
         await supabase.from('estimations').update(periodo).eq('id', est.id)
         est = { ...est, ...periodo }
       }
@@ -427,7 +427,7 @@ export default function Estimation() {
   const areasAplican = AREAS.filter(a => summary.areaAvance[a])
   const areasPendientes = areasAplican.filter(a => !areaStatus[a])
   const todasListas = areasAplican.length > 0 && areasPendientes.length === 0
-  const corte = corteDeEstimacion(estimation.period_from)
+  const corte = corteDeEstimacion(estimation.period_from, estimation.period_to)
   const puedeMarcar = a => !readonly && (perms.todo || perms.areas.has(a))
   const puedeEditar = d => !readonly && (perms.todo || perms.areas.has(disciplineArea(d)))
   const hoja = armarHoja({ project, estimation, disciplines, items, summary, rates })
