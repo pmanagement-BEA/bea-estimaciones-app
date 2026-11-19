@@ -174,21 +174,13 @@ export default function ProjectSetup() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [project, setProject] = useState(null)
-  // Secciones plegables (se recuerda por proyecto en este navegador)
-  const claveVista = `bea-setup-vista-${id}`
-  const [vista, setVista] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(claveVista)) || {} } catch { return {} }
-  })
+  // Secciones plegables: en todos los proyectos abren siempre plegadas
+  const [vista, setVista] = useState({})
   const abierto = k => !!vista[k]
-  const alternar = (k, valor) => setVista(v => {
-    const n = { ...v, [k]: valor ?? !v[k] }
-    try { localStorage.setItem(claveVista, JSON.stringify(n)) } catch { /* sin almacenamiento */ }
-    return n
-  })
+  const alternar = (k, valor) => setVista(v => ({ ...v, [k]: valor ?? !v[k] }))
   const todasDisciplinas = (valor) => setVista(v => {
     const n = { ...v }
     disciplines.forEach(d => { n['d:' + d.id] = valor })
-    try { localStorage.setItem(claveVista, JSON.stringify(n)) } catch { /* sin almacenamiento */ }
     return n
   })
   const ajeno = useAjeno(project, profile)
@@ -761,8 +753,8 @@ export default function ProjectSetup() {
 
       {/* ── Conceptos por Disciplina ───────────────────────────── */}
       {disciplines.length > 0 && (
-        <div className="mb-md">
-          <div className="section-header">
+        <div className="card mb-md">
+          <div className={`section-header${!abierto('conceptos') ? ' plegada' : ''}`}>
             <button type="button" className="seccion-plegable" onClick={() => alternar('conceptos')} aria-expanded={abierto('conceptos')}>
               <span className="chevron">{abierto('conceptos') ? '▾' : '▸'}</span>
               <span className="section-title">Conceptos por Disciplina</span>

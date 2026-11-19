@@ -247,3 +247,5 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 .chevron{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--green-soft);color:var(--green-dark);font-size:14px;line-height:1;flex-shrink:0}
 .section-header.plegada{margin-bottom:0;padding-bottom:0;border-bottom:0}
 .resumen-plegado{font-size:12px;font-weight:400;color:var(--text-muted)}
+.seccion-plegable:focus{outline:none}
+.seccion-plegable:focus-visible{outline:2px solid var(--green);outline-offset:4px;border-radius:6px}
