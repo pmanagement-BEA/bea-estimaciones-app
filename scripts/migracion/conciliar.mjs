@@ -55,7 +55,7 @@ export function aModeloApp(libroOriginal, { porMontos = false } = {}) {
     return {
       id: `d${i}`, name: d.nombre, monto_total, descuento, tarifa_hh: 0, sort_order: i,
       concepts: d.conceptos.map((c, j) => ({
-        id: `c${cid++}`, key: c.clave, description: c.descripcion, deliverable: c.entregable,
+        id: `c${cid++}`, key: limpiarClave(c.clave, d.conceptos), description: c.descripcion, deliverable: c.entregable,
         pct: c.pct, month: c.mes, type: c.finiquito ? 'Finiquito' : 'Normal', sort_order: j,
       })),
     }
@@ -111,4 +111,21 @@ export function conciliar(libro) {
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()) && process.argv[2]) {
   const libros = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
   console.log(JSON.stringify(libros.map(conciliar), null, 1))
+}
+
+/**
+ * Clave que Excel guardó como número con basura de punto flotante (6.029999999999999 → 6.03, 2.1000000000000005 → 2.10).
+ * Mismo resultado que carga_partes/claves_dos_decimales.sql + claves_revertir_sin_cero.sql (lo que hay en producción):
+ * la basura se redondea a 2 decimales; "4.1" escrito así se vuelve "4.10" solo si la disciplina numera con cero (4.01, 4.02…).
+ */
+export function limpiarClave(clave, hermanos = []) {
+  const k = String(clave ?? '').trim()
+  if (/^\d+\.\d{5,}$/.test(k)) return (Math.round(Number(k) * 100) / 100).toFixed(2)
+  if (/^\d+\.\d$/.test(k)) {
+    const claves = hermanos.map(h => String(h.clave ?? '').trim()).filter(x => x !== k)
+    const dosDecimales = claves.some(x => /^\d+\.\d\d$/.test(x) || /^\d+\.\d{5,}$/.test(x))
+    const conCero = claves.some(x => /^\d+\.0\d/.test(x))
+    if (dosDecimales && conCero) return k + '0'
+  }
+  return k
 }

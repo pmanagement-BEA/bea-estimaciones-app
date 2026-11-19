@@ -34,7 +34,9 @@ function parseEstimacionCSV(text) {
     const cols = parseCSVLine(lines[i])
     if (cols.length < 3) continue
     const discName = (cols[COL.disciplina] || '').trim()
-    const clave    = (cols[COL.clave]       || '').trim()
+    const claveCsv = (cols[COL.clave]       || '').trim()
+    // Excel a veces guarda la clave como número con basura de punto flotante (6.029999999999999 → 6.03)
+    const clave    = /^\d+\.\d{5,}$/.test(claveCsv) ? (Math.round(Number(claveCsv) * 100) / 100).toFixed(2) : claveCsv
     const desc     = (cols[COL.descripcion] || '').trim()
     const entrega  = COL.entregable !== -1 ? (cols[COL.entregable] || '').trim() : ''
     const montoRaw = COL.monto !== -1 ? (cols[COL.monto] || '0').trim() : '0'
