@@ -2,6 +2,7 @@
 // (mismo acomodo que el libro del reporte: columnas A–M, Arial 10, encabezados grises). ExcelJS se carga solo al usarlo.
 import { cargarLogoBea } from './estimacionExcel.js'
 import { cargarExcelJS, bajarArchivo } from './cargarModulo.js'
+import { mesDelPeriodo } from '../utils/cierre.js'
 
 export const AREAS_REPORTE = [
   ['Consultoría', 'CONSULTORÍA'],
@@ -12,9 +13,9 @@ export const ETIQUETA_AREA = { 'Consultoría': 'Consultoría', 'Commissioning': 
 
 const MESES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE']
 
-export function mesReporte(periodFrom) {
+export function mesReporte(periodFrom, periodTo) {
   if (!periodFrom) return ''
-  const [y, m] = periodFrom.split('-').map(Number)
+  const [y, m] = mesDelPeriodo(periodFrom, periodTo).split('-').map(Number)
   return `${MESES[m - 1]} ${y}`
 }
 
@@ -39,12 +40,12 @@ function renglonesAccion(a) {
 /**
  * Libro en el formato RC-OP-01 REV 2 "REPORTE MENSUAL / CHECKLIST DEL PROYECTO"
  * (copiado de la plantilla RC-OP-01 REPORTE DE SEGUIMIENTO MENSUAL. REV 2.xlsx).
- * datos: { proyecto, cliente, numero, periodFrom, rpt, equipo: { lider, cx, me } }
+ * datos: { proyecto, cliente, numero, periodFrom, periodTo, rpt, equipo: { lider, cx, me } }
  */
 export async function libroReporte(ExcelJS, datos, logo, logoCliente = null) {
   const { rpt = {}, equipo = {} } = datos
   const wb = new ExcelJS.Workbook()
-  const ws = wb.addWorksheet(mesReporte(datos.periodFrom) || 'Reporte', {
+  const ws = wb.addWorksheet(mesReporte(datos.periodFrom, datos.periodTo) || 'Reporte', {
     views: [{ showGridLines: false }],
     pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 1, horizontalCentered: true,
       margins: { left: 0.25, right: 0.25, top: 0.75, bottom: 0.75, header: 0, footer: 0 } },
@@ -244,5 +245,5 @@ export async function descargarReporteExcel(datos) {
   const wb = await libroReporte(ExcelJS, datos, logo, datos.logoCliente)
   const buf = await wb.xlsx.writeBuffer()
   const codigo = (datos.proyecto || '').split(/[-_]/)[0]
-  bajarArchivo(buf, `${codigo}-RC-OP-01 Reporte mensual ${mesReporte(datos.periodFrom)}.xlsx`)
+  bajarArchivo(buf, `${codigo}-RC-OP-01 Reporte mensual ${mesReporte(datos.periodFrom, datos.periodTo)}.xlsx`)
 }

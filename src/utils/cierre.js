@@ -149,6 +149,21 @@ export function moverPeriodo(periodo, mes) {
 export const fechaLocal = ts => iso(new Date(ts))
 
 /**
+ * Mes al que corresponde un periodo ('YYYY-MM'): el del día a la mitad del periodo.
+ * Así 1–31 oct y 11 oct–10 nov son octubre, y 31 oct–30 nov es noviembre.
+ * Sin fin (o fin antes del inicio), se toma el inicio + 14 días. Un periodo de varios meses
+ * (más de 45 días, p. ej. los acumulados de la migración) es del mes en que cierra.
+ */
+export function mesDelPeriodo(periodFrom, periodTo) {
+  if (!periodFrom) return ''
+  const a = fecha(periodFrom)
+  const b = periodTo && periodTo >= periodFrom ? fecha(periodTo) : new Date(a.getFullYear(), a.getMonth(), a.getDate() + 28)
+  const dias = Math.round((b - a) / 86400000)
+  if (dias > 45) return iso(b).slice(0, 7)
+  return iso(new Date(a.getFullYear(), a.getMonth(), a.getDate() + Math.floor(dias / 2))).slice(0, 7)
+}
+
+/**
  * Inicio del periodo de una estimación: el día en que se envió la estimación anterior.
  * Si la anterior no tiene fecha de envío guardada (las importadas de los libros), el día después de su fin.
  * Devuelve null si no hay estimación anterior enviada.
