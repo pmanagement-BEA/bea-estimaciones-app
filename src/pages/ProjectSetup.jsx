@@ -8,6 +8,7 @@ import { disciplineSubtotal, projectTotals, conceptAmount, projectRates, discipl
 import { fetchDirectorio, fetchProjectMembers, setProjectRole, TEAM_ROLE_AREA, isReadOnlyRole } from '../lib/directorio'
 import { useAuth } from '../hooks/useAuth'
 import { useAjeno, AVISO_AJENO } from '../hooks/useAjeno'
+import { plantillaServicio, huellaDisciplinas } from '../lib/plantillasServicio'
 
 // ── Parseo de CSV ─────────────────────────────────────────────────────────────
 function parseCSVLine(line) {
@@ -83,101 +84,6 @@ const TEAM_ROLES = [
   ['me','Consultor de Modelación Energética'],
   ['consultor','Consultor de Consultoría LEED'],
 ]
-// Genera las disciplinas + conceptos por defecto del machote BEA.
-// mesesF2 = meses de diseño (Fase 2), mesesF3 = meses de construcción (Fase 3 y CX)
-function buildTemplateDisciplines(mesesF2 = 8, mesesF3 = 18) {
-  const LEED_F2_EST = 387432
-  const LEED_F3_EST = 183569.472
-  const EH_EST = 17280
-  const ME_EST = 172914.759
-
-  const n2 = Math.max(1, Math.min(60, mesesF2))
-  const n3 = Math.max(1, Math.min(60, mesesF3))
-
-  const fase2Concepts = []
-  for (let i = 1; i <= n2; i++) {
-    fase2Concepts.push({ key: `2.b.${String(i).padStart(2, '0')}`, description: `Seguimiento LEED diseño mes ${i}: reunión mensual, revisión de entregables de diseño, asesoría técnica LEED y desarrollo de cálculos`, deliverable: '1. Reporte.', pct: (47520 / LEED_F2_EST) * 100, month: '', type: 'Normal' })
-  }
-  fase2Concepts.push({ key: '2.09', description: 'Reporte de Revisión de Diseño Final', deliverable: '1. Reporte.', pct: (7272 / LEED_F2_EST) * 100, month: '', type: 'Normal' })
-
-  const fase3Concepts = []
-  for (let i = 1; i <= n3; i++) {
-    fase3Concepts.push({ key: `3.seg.${String(i).padStart(2, '0')}`, description: `Seguimiento LEED Construcción y Reporte Mensual de Avance - Mes ${i}`, deliverable: '1. Reporte mensual.', pct: (4267.35 / LEED_F3_EST) * 100, month: '', type: 'Normal' })
-  }
-  for (let mes = 2, b = 1; mes <= n3; mes += 2, b++) {
-    fase3Concepts.push({ key: `3.bim.${String(b).padStart(2, '0')}`, description: `Reunión bimensual en sitio — Mes ${mes} de construcción`, deliverable: '1. Reporte de Inspección.', pct: (5637.6 / LEED_F3_EST) * 100, month: '', type: 'Normal' })
-  }
-  fase3Concepts.push({ key: '3.31', description: 'Plan de Calidad del Ambiente Interior', deliverable: '1. Plan.', pct: (2466.45 / LEED_F3_EST) * 100, month: '', type: 'Normal' })
-
-  const cxConcepts = []
-  for (let i = 1; i <= n3; i++) {
-    cxConcepts.push({ key: `cx.seg.${String(i).padStart(2, '0')}`, description: `Seguimiento de proyecto mes ${i}`, deliverable: '1. Reporte.', pct: Math.round((100 / (n3 + 3)) * 10) / 10, month: '', type: 'Normal' })
-  }
-  cxConcepts.push(
-    { key: 'cx.fin.01', description: 'Revisión de pruebas pre-funcionales de los sistemas', deliverable: '1. Reporte.', pct: 100 / (n3 + 3), month: '', type: 'Normal' },
-    { key: 'cx.fin.02', description: 'Revisión de Pruebas funcionales de los sistemas', deliverable: '1. Reporte.', pct: 100 / (n3 + 3), month: '', type: 'Normal' },
-    { key: 'cx.fin.03', description: 'Integración del manual de O&M general y reporte final', deliverable: '1. Documento.', pct: 100 / (n3 + 3), month: '', type: 'Normal' },
-  )
-
-  const plantilla = [
-    {
-      name: 'Fase Uno: Diagnóstico, Factibilidad y Plan de Acción para Certificación LEED',
-      concepts: [
-        { key: '1.01', description: 'Diagnóstico de sustentabilidad del proyecto: revisión de condiciones del sitio, programa arquitectónico y estrategias de diseño pasivo', deliverable: '1. Reporte de diagnóstico.', pct: 25, month: '', type: 'Normal' },
-        { key: '1.02', description: 'Análisis de factibilidad LEED: evaluación de créditos alcanzables, nivel de certificación objetivo y brechas principales', deliverable: '1. Matriz de factibilidad.', pct: 25, month: '', type: 'Normal' },
-        { key: '1.03', description: 'Plan Estratégico de Acción LEED: hoja de ruta de créditos, responsables, entregables y cronograma de certificación', deliverable: '1. Plan Estratégico.', pct: 25, month: '', type: 'Normal' },
-        { key: '1.04', description: 'Taller de alineación con equipo de diseño: sesión de trabajo para socializar el plan LEED y definir compromisos por disciplina', deliverable: '1. Minuta de taller.', pct: 25, month: '', type: 'Normal' },
-      ],
-    },
-    { name: 'Fase Dos: Asesoría y Gestión LEED Diseño e Ingenierías', concepts: fase2Concepts },
-    { name: 'Fase Tres: Asesoría y Gestión LEED Construcción', concepts: fase3Concepts },
-    { name: 'Fundamental Commissioning', concepts: cxConcepts },
-    {
-      name: 'Enhanced Commissioning & Monitoring-Based Commissioning',
-      concepts: [
-        { key: '5.02', description: 'Revision de submittals de los sistemas', deliverable: '1. Reporte.', pct: (14400 / EH_EST) * 100, month: '', type: 'Normal' },
-        { key: '5.03', description: 'Revision de los entrenamientos de los sistemas', deliverable: '1. Reporte.', pct: (1728 / EH_EST) * 100, month: 'TBD', type: 'Normal' },
-        { key: '5.04', description: 'Plan de comisionamiento continuo', deliverable: '1. Plan Cx.', pct: (1152 / EH_EST) * 100, month: 'TBD', type: 'Normal' },
-      ],
-    },
-    {
-      name: 'Modelación Energética',
-      concepts: [
-        { key: '6.02a', description: 'Iteracion 2', deliverable: '1. Reporte.', pct: (43809.984 / ME_EST) * 100, month: '', type: 'Normal' },
-        { key: '6.04a', description: 'Reunion via remota de revision de reportes - iteracion 2', deliverable: '1. Minuta.', pct: (1422.9 / ME_EST) * 100, month: '', type: 'Normal' },
-        { key: '6.05b', description: 'Version 1 de cambios en Modelo Energetico derivados de ajustes en el proyecto arquitectonico', deliverable: '1. Reporte.', pct: (11700 / ME_EST) * 100, month: '', type: 'Normal' },
-        { key: '6.06b', description: 'Version 2 de cambios en Modelo Energetico derivados de ajustes en el proyecto arquitectonico', deliverable: '1. Reporte.', pct: (115981.875 / ME_EST) * 100, month: '', type: 'Normal' },
-      ],
-    },
-    {
-      name: 'Certificación (FINIQUITO)',
-      concepts: [
-        { key: '7.01', description: 'Envio a revision preliminar', deliverable: '1. Submittals.', pct: 45, month: '', type: 'Finiquito' },
-        { key: '7.02', description: 'Envio a revision final', deliverable: '1. Submittals.', pct: 30, month: '', type: 'Finiquito' },
-        { key: '7.03', description: 'Certificacion', deliverable: '1. Certificado.', pct: 25, month: '', type: 'Finiquito' },
-      ],
-    },
-  ]
-  return plantilla.map(d => ({ ...d, concepts: a100(d.concepts) }))
-}
-
-// Reparte para que los conceptos de cada tipo sumen exactamente 100% (respeta los pesos;
-// el redondeo se ajusta en el último concepto).
-function a100(concepts) {
-  const out = concepts.map(c => ({ ...c }))
-  for (const tipo of ['Normal', 'Finiquito']) {
-    const grupo = out.filter(c => c.type === tipo)
-    const total = grupo.reduce((s, c) => s + c.pct, 0)
-    if (!grupo.length || total <= 0) continue
-    let acumulado = 0
-    grupo.forEach((c, i) => {
-      c.pct = i === grupo.length - 1 ? Math.round((100 - acumulado) * 1e6) / 1e6 : Math.round((c.pct / total) * 100 * 1e6) / 1e6
-      acumulado += c.pct
-    })
-  }
-  return out
-}
-
 function getTeamMembers() {
   try { return JSON.parse(localStorage.getItem('bea_team_members') || '[]') } catch { return [] }
 }
@@ -294,6 +200,10 @@ export default function ProjectSetup() {
     setProject(prev => {
       const updated = { ...prev, [field]: value }
       scheduleProjectSave(updated)
+      if (field === 'service_type' || field === 'meses_fase2' || field === 'meses_fase3') {
+        if (!plantillaPrevia.current && discRef.current.length) plantillaPrevia.current = { tipo: prev.service_type, m2: prev.meses_fase2 || 8, m3: prev.meses_fase3 || 18 }
+        programarPlantilla(updated, { porTipo: field === 'service_type' })
+      }
       return updated
     })
   }
@@ -316,17 +226,58 @@ export default function ProjectSetup() {
     setDisciplines(prev => [...prev, { ...data, concepts: [] }])
   }
 
-  async function addDefaultDisciplines() {
-    if (cargandoPlantilla.current || disciplines.length > 0) return
+  // ── Plantilla por tipo de servicio ─────────────────────────────────────────
+  // Al elegir el tipo de servicio (o los meses) de un proyecto sin estimaciones ni montos,
+  // se cargan solas las disciplinas y conceptos de ese tipo. Si ya estaban las de otra
+  // plantilla sin tocar, se reemplazan; si el líder ya las editó, se pregunta antes.
+  const plantillaTimer = useRef(null)
+  const plantillaPrevia = useRef(null) // { tipo, m2, m3 } con que se cargó la plantilla actual
+  const discRef = useRef(disciplines)
+  discRef.current = disciplines
+
+  const sinMontos = ds => ds.every(d => !(parseFloat(d.monto_total) > 0) && !(parseFloat(d.descuento) > 0))
+
+  function programarPlantilla(p, { porTipo = false } = {}) {
+    if (soloLectura || estimations.length > 0) return
+    clearTimeout(plantillaTimer.current)
+    plantillaTimer.current = setTimeout(() => sincronizarPlantilla(p, porTipo), 700)
+  }
+
+  async function sincronizarPlantilla(p, porTipo) {
+    if (cargandoPlantilla.current) { programarPlantilla(p, { porTipo }); return }
+    const actuales = discRef.current
+    if (!sinMontos(actuales)) return
+    const m2 = p.meses_fase2 || 8, m3 = p.meses_fase3 || 18
+    const plantilla = plantillaServicio(p.service_type, m2, m3)
+    if (!plantilla) return // "Mixto": se capturan a mano
+    if (actuales.length > 0) {
+      const prev = plantillaPrevia.current
+      const intacta = prev && huellaDisciplinas(actuales) === huellaDisciplinas(plantillaServicio(prev.tipo, prev.m2, prev.m3))
+      if (huellaDisciplinas(actuales) === huellaDisciplinas(plantilla)) { plantillaPrevia.current = { tipo: p.service_type, m2, m3 }; return }
+      if (!intacta) {
+        if (!porTipo) return
+        if (!window.confirm(`¿Reemplazar las disciplinas actuales por la plantilla de "${p.service_type}"? Aún no tienen montos ni estimaciones.`)) return
+      }
+    }
+    await cargarPlantilla(plantilla, actuales)
+    plantillaPrevia.current = { tipo: p.service_type, m2, m3 }
+  }
+
+  async function cargarPlantilla(template, anteriores = []) {
+    if (cargandoPlantilla.current) return
     cargandoPlantilla.current = true
     setSaving(true)
-    const template = buildTemplateDisciplines(project.meses_fase2 || 8, project.meses_fase3 || 18)
+    const fallo = msg => { toast(msg, true); setSaving(false); cargandoPlantilla.current = false }
+    if (anteriores.length) {
+      const { error } = await supabase.from('disciplines').delete().in('id', anteriores.map(d => d.id))
+      if (error) return fallo('No se pudieron quitar las disciplinas anteriores')
+    }
     const newDiscs = []
     for (let i = 0; i < template.length; i++) {
       const t = template[i]
       const { data: disc, error: dErr } = await supabase
-        .from('disciplines').insert({ project_id: id, name: t.name, sort_order: i }).select().single()
-      if (dErr) { toast('Error al crear disciplinas', true); setSaving(false); cargandoPlantilla.current = false; return }
+        .from('disciplines').insert({ project_id: id, name: t.name, sort_order: i, ...(t.area ? { area: t.area } : {}) }).select().single()
+      if (dErr) { setDisciplines(newDiscs); return fallo('Error al crear disciplinas') }
       let concepts = []
       if (t.concepts.length > 0) {
         const rows = t.concepts.map((c, j) => ({
@@ -335,7 +286,7 @@ export default function ProjectSetup() {
           pct: c.pct, month: c.month || '', type: c.type || 'Normal', sort_order: j,
         }))
         const { data: cData, error: cErr } = await supabase.from('concepts').insert(rows).select()
-        if (cErr) { toast('Error al crear conceptos', true); setSaving(false); cargandoPlantilla.current = false; return }
+        if (cErr) { setDisciplines([...newDiscs, { ...disc, concepts: [] }]); return fallo('Error al crear conceptos') }
         concepts = [...(cData || [])].sort((a, b) => a.sort_order - b.sort_order)
       }
       newDiscs.push({ ...disc, concepts })
@@ -343,8 +294,14 @@ export default function ProjectSetup() {
     setDisciplines(newDiscs)
     setSaving(false)
     cargandoPlantilla.current = false
-    toast('Disciplinas y conceptos cargados ✓')
+    toast(anteriores.length ? 'Disciplinas cambiadas a la nueva plantilla ✓' : 'Disciplinas y conceptos del servicio cargados ✓')
   }
+
+  // Proyecto nuevo de la app, todavía vacío: carga la plantilla de su tipo de servicio al abrir
+  useEffect(() => {
+    if (loading || !project || soloLectura) return
+    if (project.origen_datos === 'app' && disciplines.length === 0 && estimations.length === 0) programarPlantilla(project)
+  }, [loading])
 
   async function removeDiscipline(discId) {
     const { error } = await supabase.from('disciplines').delete().eq('id', discId)
@@ -738,17 +695,17 @@ export default function ProjectSetup() {
             )}
           </button>
           <div className="flex gap-sm">
-            {disciplines.length === 0 && (
-              <button className="btn btn-dark btn-sm" onClick={addDefaultDisciplines} disabled={saving}>
-                ⚡ Cargar disciplinas BEA
-              </button>
-            )}
             <button className="btn btn-outline btn-sm" onClick={addDiscipline}>+ Disciplina</button>
           </div>
         </div>
         {!abierto('montos') && disciplines.length > 0 ? null : disciplines.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>
-            Sin disciplinas. Haz clic en "Cargar disciplinas BEA" para agregar las 4 estándar, o en "+ Disciplina" para agregar manualmente.
+            {saving ? `Cargando las disciplinas de ${project.service_type}…`
+              : !plantillaServicio(project.service_type) ? 'Este tipo de servicio no tiene plantilla. Agrega las disciplinas con "+ Disciplina".'
+              : soloLectura || estimations.length > 0 ? 'Sin disciplinas.'
+              : <>Sin disciplinas. Elige el tipo de servicio y se cargan solas sus disciplinas y conceptos, o{' '}
+                  <button type="button" className="btn-link" style={{ padding: 0, border: 0, background: 'none', color: 'var(--green-dark)', cursor: 'pointer', textDecoration: 'underline', font: 'inherit' }}
+                    onClick={() => programarPlantilla(project, { porTipo: true })}>cárgalas ahora para {project.service_type}</button>.</>}
           </div>
         ) : (
           <div className="table-wrap">
