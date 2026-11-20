@@ -6,7 +6,7 @@ import Modal from '../components/Modal'
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, projectRates, AREAS, disciplineArea } from '../utils/calculations'
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
-import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo, inicioDelPeriodo, fechaLocal } from '../utils/cierre'
+import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo, inicioDelPeriodo, fechaLocal, mesDelPeriodo } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
 import { cargarExcelJS } from '../lib/cargarModulo'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
@@ -24,7 +24,7 @@ const CAMPOS_HEREDADOS = ['acciones_pendientes', 'informacion_pendiente', 'riesg
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function monthOptions(periodFrom, startDate, endDate) {
+function monthOptions(mes, startDate, endDate) {
   let rangeStart, rangeEnd
   if (startDate && endDate) {
     rangeStart = new Date(startDate + 'T00:00:00')
@@ -43,7 +43,7 @@ function monthOptions(periodFrom, startDate, endDate) {
     const m = cursor.getMonth()
     const value = `${y}-${String(m + 1).padStart(2, '0')}`
     const label = `${MESES[m]} ${y}`
-    opts.push({ value, label, selected: (periodFrom || '').startsWith(value) })
+    opts.push({ value, label, selected: mes === value })
     cursor.setMonth(cursor.getMonth() + 1)
   }
   return opts
@@ -486,7 +486,7 @@ export default function Estimation() {
   }
 
   const estNumLabel = `#${String(estimation.number).padStart(3, '0')}`
-  const monthOpts = monthOptions(estimation.period_from, project.start_date, project.end_date)
+  const monthOpts = monthOptions(mesDelPeriodo(estimation.period_from, estimation.period_to), project.start_date, project.end_date)
 
   return (
     <div className="main">
@@ -918,7 +918,8 @@ export default function Estimation() {
         const rpt = reportData || {}
         const reportReadonly = estimation.report_sent === true || soloLectura
         const rd = key => rpt[key] || []
-        const mesReporteTxt = estimation.period_from ? `${MESES[Number(estimation.period_from.slice(5, 7)) - 1]} ${estimation.period_from.slice(0, 4)}` : '—'
+        const mesRpt = mesDelPeriodo(estimation.period_from, estimation.period_to)
+        const mesReporteTxt = mesRpt ? `${MESES[Number(mesRpt.slice(5, 7)) - 1]} ${mesRpt.slice(0, 4)}` : '—'
         // Acciones agrupadas por área (Consultoría, Comisionamiento, Modelado energético), como en el formato
         const ordenArea = Object.fromEntries(AREAS_REPORTE.map(([a], i) => [a, i]))
         const accionesOrdenadas = rd('acciones_realizadas').map((r, i) => [r, i])
@@ -926,7 +927,7 @@ export default function Estimation() {
         const bajarReporteExcel = async () => {
           try {
             await descargarReporteExcel({
-              proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, equipo,
+              proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, periodTo: estimation.period_to, equipo,
               logoCliente: await leerLogoCliente(project),
               rpt: { ...rpt, inicio_contrato: rpt.inicio_contrato || project.start_date, fin_contrato: rpt.fin_contrato || project.end_date },
             })
