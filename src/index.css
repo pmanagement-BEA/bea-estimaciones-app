@@ -406,3 +406,23 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 .en-construccion .icono{font-size:44px;margin-bottom:8px}
 .en-construccion .etiqueta{display:inline-block;background:#FFF4E5;color:#9A5B00;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700;margin-bottom:12px}
 .en-construccion p{color:var(--text-muted);font-size:14px;margin:0 0 18px}
+
+/* Vista previa de la última estimación (formulario de proyección) */
+.previa-est{border:1px solid var(--border);border-radius:8px;background:var(--bg-soft,#f7f9fb);font-size:12.5px}
+.previa-est.vacia{padding:10px 12px;color:var(--text-muted)}
+.previa-est summary{cursor:pointer;padding:10px 12px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;font-weight:600;color:var(--navy)}
+.previa-est summary .res{font-weight:400;color:var(--text-muted)}
+.previa-est .cuerpo{padding:0 12px 10px}
+.previa-est .barra{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:8px}
+.previa-est .barra select{max-width:100%;font-size:12px;padding:4px 8px}
+.previa-est ul{list-style:none;margin:0;padding:0;max-height:260px;overflow:auto;border-top:1px solid var(--border)}
+.previa-est li{display:grid;grid-template-columns:8px minmax(0,1fr) auto auto 92px;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.previa-est li.elegido{background:rgba(46,160,67,.08)}
+.previa-est .punto{width:8px;height:8px;border-radius:50%}
+.previa-est .txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.previa-est .monto{font-variant-numeric:tabular-nums;font-weight:600}
+.previa-est .falta{color:var(--text-muted);font-size:11.5px;white-space:nowrap}
+.previa-est .ya{color:var(--text-soft);font-size:11px;text-align:center}
+.previa-est li .btn{padding:2px 8px;font-size:11.5px}
+.previa-est .nota{color:var(--text-muted);font-size:11px;margin-top:6px}
+@media (max-width:600px){.previa-est li{grid-template-columns:8px minmax(0,1fr) auto;}.previa-est .falta{grid-column:2}.previa-est li .btn,.previa-est .ya{grid-column:3}}
