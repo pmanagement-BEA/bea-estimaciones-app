@@ -167,32 +167,16 @@ export default function Estimation() {
       }
     }
 
-    // Proyecciones del mes: se precargan en un borrador nuevo (o se ofrecen si ya tenía conceptos)
+    // Proyecciones del mes: se sugieren (etiqueta "Proyectado" y botón para marcarlas); nada se marca solo
     let infoProyectados = { ids: new Set(), faltan: [], auto: 0, total: 0 }
     if (est.status === 'Borrador') {
       const mesEst = mesDelPeriodo(est.period_from, est.period_to)
       const { data: prs } = await supabase.from('proyecciones').select('concept_id, monto').eq('project_id', id).eq('mes', mesEst).not('concept_id', 'is', null)
       if (prs?.length) {
-        const rates = projectRates(projRes.data)
         const libres = new Set(conceptosPorEstimar(projRes.data, discs, allEsts.filter(e => e.id !== est.id)).filter(x => x.porEstimar >= x.monto - 0.5).map(x => x.concept.id))
         const ids = new Set(prs.map(x => x.concept_id))
         const faltan = [...ids].filter(cid => libres.has(cid) && !itemMap[cid]?.included)
         infoProyectados = { ids, faltan, auto: 0, total: 0 }
-        if ((est.estimation_items || []).length === 0 && faltan.length) {
-          for (const cid of faltan) {
-            const [c, d] = discs.flatMap(dd => dd.concepts.map(cc => [cc, dd])).find(([cc]) => cc.id === cid)
-            const nuevo = { ...itemMap[cid], included: true }
-            nuevo.amount = itemAmount(nuevo, c, d, rates, discs)
-            const { data: creado } = await supabase.from('estimation_items').insert({
-              estimation_id: est.id, concept_id: cid, included: true, amount: nuevo.amount || 0,
-              parcial_enabled: false, pct_parcial: 0, delayed: false, cause: '',
-            }).select().single()
-            itemMap[cid] = creado ? { ...nuevo, id: creado.id } : nuevo
-            infoProyectados.total += nuevo.amount || 0
-          }
-          infoProyectados.auto = faltan.length
-          infoProyectados.faltan = []
-        }
       }
     }
     setProyectados(infoProyectados)
@@ -682,12 +666,10 @@ export default function Estimation() {
           </div>
 
           {/* Lo proyectado para este mes */}
-          {estimation.status === 'Borrador' && (proyectados.auto > 0 || proyectados.faltan.length > 0) && (
+          {estimation.status === 'Borrador' && proyectados.faltan.length > 0 && (
             <div className="card mb-md no-print" style={{ borderLeft: '4px solid var(--green)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 16px' }}>
               <span style={{ fontSize: 13 }}>
-                {proyectados.auto > 0
-                  ? <>Se precargaron <strong>{proyectados.auto} conceptos proyectados</strong> para este mes ({fmtMoney(proyectados.total, project.currency)}). Revísalos: puedes quitar los que no se vayan a cobrar.</>
-                  : <>Hay <strong>{proyectados.faltan.length} conceptos proyectados</strong> para este mes que no están marcados.</>}
+                Hay <strong>{proyectados.faltan.length} {proyectados.faltan.length === 1 ? 'concepto proyectado' : 'conceptos proyectados'}</strong> para este mes que no {proyectados.faltan.length === 1 ? 'está marcado' : 'están marcados'} (etiqueta "Proyectado"). Márcalos si sí se van a cobrar.
               </span>
               <span className="flex gap-sm">
                 {proyectados.faltan.length > 0 && !readonly && <button className="btn btn-sm btn-primary" onClick={marcarProyectados}>Marcar los proyectados</button>}
