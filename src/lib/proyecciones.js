@@ -178,3 +178,15 @@ export function versionesDelMes(historial, mes) {
   }
   return [...porDia.values()]
 }
+
+const ROL_CORTO = { cx: 'Cx', me: 'ME', consultor: 'Consultor', coordinador: 'Coordinador' }
+/** El resto del equipo de cada proyecto (sin el líder): { project_id: ['Cx: Nombre', 'ME: Nombre', …] } */
+export function equipos(projects, miembros, nombrePorEmail = {}) {
+  const orden = ['consultor', 'cx', 'me', 'coordinador']
+  const out = {}
+  for (const p of projects) {
+    const ms = miembros.filter(m => m.project_id === p.id && m.rol !== 'lider').sort((a, b) => orden.indexOf(a.rol) - orden.indexOf(b.rol))
+    out[p.id] = [...new Set(ms.map(m => `${ROL_CORTO[m.rol] || m.rol}: ${nombreCorto(nombrePorEmail[String(m.email || '').toLowerCase()]) || String(m.email || '').split('@')[0]}`))]
+  }
+  return out
+}

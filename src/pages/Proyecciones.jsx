@@ -6,10 +6,12 @@ import { fetchMyAssignments } from '../lib/directorio'
 import { toast } from '../components/Toast'
 import GraficaProyecciones from '../components/GraficaProyecciones'
 import TarjetaProyeccion from '../components/TarjetaProyeccion'
+import FormProyeccion from '../components/FormProyeccion'
+import { isReadOnlyRole } from '../lib/directorio'
 import { fmtMoney } from '../utils/format'
 import {
   AREAS, COLOR_AREA, mesIso, sumarMeses, textoMes, textoMesCorto, rangoMeses, prepararProyecto, estimadoPorMes, estimadoPorConcepto,
-  sumarProyecciones, estaCongelada, textoCongelamiento, fechaCongelamiento, quienProyecta, responsables, versionesDelMes,
+  sumarProyecciones, estaCongelada, textoCongelamiento, fechaCongelamiento, quienProyecta, responsables, equipos, versionesDelMes,
 } from '../lib/proyecciones'
 
 const corto = v => (v ? `$${Math.round(v).toLocaleString('es-MX')}` : '')
@@ -40,6 +42,7 @@ export default function Proyecciones() {
   const [mesHist, setMesHist] = useState('')
   const [conCarga, setConCarga] = useState(false)
   const [limite, setLimite] = useState(200)
+  const [nueva, setNueva] = useState(null) // { project_id?, mes? } mientras se captura una proyección
 
   useEffect(() => {
     Promise.all([
@@ -53,7 +56,7 @@ export default function Proyecciones() {
       const projects = p.data || []
       const conceptos = new Map()
       for (const x of projects) for (const d of x.disciplines || []) for (const c of d.concepts || []) conceptos.set(c.id, { c, orden: (d.sort_order || 0) * 1e4 + (c.sort_order || 0) })
-      setDatos({ projects, proyecciones: pr.data || [], nombrePorEmail, conceptos, lideres: responsables(projects, mi.data || [], nombrePorEmail) })
+      setDatos({ projects, proyecciones: pr.data || [], nombrePorEmail, conceptos, lideres: responsables(projects, mi.data || [], nombrePorEmail), equipos: equipos(projects, mi.data || [], nombrePorEmail) })
     })
   }, [])
   useEffect(() => { if (profile?.email) fetchMyAssignments(profile.email).then(setMios) }, [profile?.email])
@@ -86,6 +89,15 @@ export default function Proyecciones() {
 
   if (!datos) return <div className="main"><div className="spinner" /></div>
 
+  // Quién puede capturar: coordinador, dueño o alguien del equipo del proyecto (no "solo lectura")
+  const puedeEditar = p => !isReadOnlyRole(profile) && (profile?.role === 'coordinador' || p.user_id === profile?.id || !!mios[p.id]?.length)
+  const editables = datos.projects.filter(p => ['Activo', 'Pausado'].includes(p.status) && puedeEditar(p))
+  async function recargar() {
+    const { data } = await supabase.from('proyecciones').select('id, project_id, mes, area, monto, tbd, concept_id, descripcion, creado_por')
+    setDatos(d => ({ ...d, proyecciones: data || d.proyecciones }))
+    setHistorial(null)
+  }
+
   const nombre = e => quienProyecta(e, datos.nombrePorEmail)
   // Conceptos de un proyecto en un mes, agrupados (un concepto o descripción libre por renglón)
   const conceptosDe = (b, m) => {
@@ -109,7 +121,8 @@ export default function Proyecciones() {
   const listaDelMes = (m, cerrado) => {
     const tarjetas = base.map(b => ({ b, conceptos: conceptosDe(b, m), total: totalDe(b, m) })).filter(x => x.conceptos.length).sort((a, b) => b.total - a.total)
     if (!tarjetas.length) return <div className="empty-state"><h3>Sin proyecciones para {textoMes(m)} con estos filtros</h3></div>
-    const tarjeta = ({ b, conceptos }) => <TarjetaProyeccion key={b.p.id} p={b.p} lider={b.lider} conceptos={conceptos} estimado={m <= hoy ? b.estC[m] || {} : null} cerrado={cerrado} alAbrir={abrir(b.p)} />
+    const tarjeta = ({ b, conceptos }) => <TarjetaProyeccion key={b.p.id} p={b.p} lider={b.lider} equipo={datos.equipos[b.p.id]} conceptos={conceptos} estimado={m <= hoy ? b.estC[m] || {} : null} cerrado={cerrado} alAbrir={abrir(b.p)}
+      alAgregar={!cerrado && !estaCongelada(m) && puedeEditar(b.p) ? () => setNueva({ project_id: b.p.id, mes: m }) : null} />
     if (!agrupar) return <div className="tarjetas-proy">{tarjetas.map(tarjeta)}</div>
     const grupos = new Map()
     for (const t of tarjetas) { const k = t.b.lider || 'Sin líder asignado'; grupos.set(k, [...(grupos.get(k) || []), t]) }
@@ -385,10 +398,22 @@ export default function Proyecciones() {
       <div className="breadcrumb">
         <a onClick={() => navigate('/')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Proyecciones</span>
       </div>
-      <div style={{ marginBottom: 14 }}>
-        <h1 className="page-title">Proyecciones <span style={{ color: 'var(--green-dark)' }}>de cobro</span></h1>
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Lo que cada proyecto piensa estimar, por mes de la estimación (se factura al mes siguiente)</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <div>
+          <h1 className="page-title">Proyecciones <span style={{ color: 'var(--green-dark)' }}>de cobro</span></h1>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Lo que cada proyecto piensa estimar, por mes de la estimación (se factura al mes siguiente)</div>
+        </div>
+        {editables.length > 0 && <button className="btn btn-primary" onClick={() => setNueva({ mes: tab === 'mes' ? mes : undefined })}>＋ Agregar proyección</button>}
       </div>
+      {nueva && (
+        <div className="modal-overlay show" onClick={e => e.target === e.currentTarget && setNueva(null)}>
+          <div className="modal-proy">
+            <FormProyeccion key={`${nueva.project_id || ''}${nueva.mes || ''}`} proyectos={nueva.project_id ? datos.projects.filter(p => p.id === nueva.project_id) : editables}
+              inicial={nueva} proyecciones={datos.proyecciones} titulo="Nueva proyección"
+              onGuardado={() => { const m = nueva.mes; setNueva(null); recargar(); if (m && tab === 'mes') setMes(m) }} onCancelar={() => setNueva(null)} />
+          </div>
+        </div>
+      )}
       <div className="pestanas-proy" role="tablist">
         <button role="tab" aria-selected={tab === 'mes'} className={tab === 'mes' ? 'activa' : ''} onClick={() => setTab('mes')}>Por mes<span>qué se va a estimar y sus conceptos</span></button>
         <button role="tab" aria-selected={tab === 'anio'} className={tab === 'anio' ? 'activa' : ''} onClick={() => setTab('anio')}>12 meses<span>{textoMesCorto(doce[0])} – {textoMesCorto(doce.at(-1))}, resumen</span></button>

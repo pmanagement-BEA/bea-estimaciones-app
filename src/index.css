@@ -396,3 +396,8 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 .subpestanas button.activa{background:var(--navy);border-color:var(--navy);color:#fff}
 .aviso-congelado{background:#EEF6F1;border-left:4px solid var(--green);padding:8px 12px;font-size:13px;margin-bottom:10px;border-radius:4px}
 .tarjeta-proy .fuera{font-size:11px;color:var(--text-muted);margin-top:6px;padding-top:5px;border-top:1px dashed var(--border)}
+.tarjeta-proy .equipo{color:var(--text-soft)}
+.tarjeta-proy .btn-agregar{margin-top:6px;background:none;border:1px dashed var(--border);border-radius:6px;padding:4px 10px;font:inherit;font-size:11.5px;color:var(--green-dark);cursor:pointer;width:100%;text-align:left}
+.tarjeta-proy .btn-agregar:hover{border-color:var(--green);background:#F3FAF5}
+.modal-proy{width:100%;max-width:760px;max-height:calc(100vh - 40px);overflow:auto}
+.modal-proy .form-proy{margin:0;box-shadow:var(--shadow-lg)}
