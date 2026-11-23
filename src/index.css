@@ -305,6 +305,7 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 .estimacion-breve .eb-tabla tr:last-child td{border-bottom:none}
 .estimacion-breve .eb-tabla tr.fin td{background:#FEF3C7}
 .estimacion-breve .eb-tag{display:inline-block;margin-left:4px;font-size:9px;font-weight:700;background:#B7791F;color:#fff;padding:1px 5px;border-radius:3px}
+.estimacion-breve .eb-nota{font-size:9.5px;font-style:italic;color:#B7791F;margin-top:2px}
 .estimacion-breve .eb-vacio{color:#7B8794;font-style:italic;padding:8px 0}
 .estimacion-breve .eb-pie{display:flex;justify-content:space-between;gap:12px;border-top:1px solid #ccc;margin-top:18px;padding-top:7px;font-size:10px;color:#666}
 @media (max-width: 700px){ .estimacion-breve .eb-tarjetas{grid-template-columns:repeat(2,1fr)} .estimacion-breve{padding:16px} }

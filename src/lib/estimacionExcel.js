@@ -229,7 +229,7 @@ export async function libroEstimacion(ExcelJS, hoja, logo) {
     for (const f of b.filas) {
       // Alto según el texto acomodado: concepto (C:H, ~95 caracteres por línea) y entregable (I, ~20 por línea a 10 pt)
       const lineasDe = (t, ancho) => String(t || '').split(/\r?\n/).reduce((n, l) => n + Math.max(1, Math.ceil(l.length / ancho)), 0)
-      const lineas = Math.max(1, lineasDe(f.concepto, 95), lineasDe(f.entregable, 20))
+      const lineas = Math.max(1, lineasDe(f.concepto, 95) + (f.nota ? 1 : 0), lineasDe(f.entregable, 20))
       ws.getRow(r).height = Math.max(21, lineas * 14 + 4)
       const pctAnt = f.monto > 0 ? f.anterior / f.monto : 0
       const pctEsta = f.monto > 0 ? f.esta / f.monto : 0
@@ -237,7 +237,10 @@ export async function libroEstimacion(ExcelJS, hoja, logo) {
       const din = { ...cen, numFmt: MONEDA }
       const cap = { fill: relleno('FFFFF2DC'), h: 'center', numFmt: '0.00' }
       poner(`B${r}`, f.clave, { ...cen, numFmt: '0.00' })
-      poner(`C${r}:H${r}`, f.concepto, { font: gbk(11), wrap: true })
+      // Cobro en partes: nota corta debajo del concepto ("Cobro parcial: 50% en esta estimación")
+      poner(`C${r}:H${r}`, f.nota
+        ? { richText: [{ text: f.concepto || '', font: gbk(11) }, { text: `\n${f.nota}`, font: { ...gbk(9), italic: true, color: { argb: 'FFB7791F' } } }] }
+        : f.concepto, { font: gbk(11), wrap: true })
       poner(`I${r}`, f.entregable, { font: gbk(10), h: 'left', wrap: true, numFmt: '0%' })
       poner(`J${r}`, montoBloque > 0 && !f.finiquito ? f.monto / montoBloque : 0, { ...cen, numFmt: '0.00%' })
       if (f.finiquito) {

@@ -13,20 +13,20 @@ export async function libroBreve(ExcelJS, hoja, logo, elaboradoPor = '') {
     pageSetup: { paperSize: 1, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.7, header: 0.2, footer: 0.3 } },
     headerFooter: { oddFooter: `&8Estimación #${b.numero} · ${b.proyecto}&R&8Generado: ${fmtDate(new Date().toISOString().slice(0, 10))} · Elaborado por: ${elaboradoPor || '—'}` },
   })
-  ws.columns = [{ width: 10 }, { width: 48 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }, { width: 15 }]
+  ws.columns = [{ width: 10 }, { width: 46 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 10 }]
   const fmt = b.moneda === 'USD' ? '"US$"#,##0.00' : '"$"#,##0.00'
   const borde = { bottom: { style: 'thin', color: { argb: LINEA } } }
 
   if (logo) { const id = wb.addImage({ buffer: logo, extension: 'jpeg' }); ws.addImage(id, { tl: { col: 0, row: 0 }, ext: { width: 150, height: 44 } }) }
-  ws.mergeCells('D1:G1'); ws.getCell('D1').value = b.proyecto
-  ws.mergeCells('D2:G2'); ws.getCell('D2').value = `Cliente: ${b.cliente || '—'}`
-  ws.mergeCells('D3:G3'); ws.getCell('D3').value = `Periodo: ${fmtDate(b.periodFrom)} — ${fmtDate(b.periodTo)}`
+  ws.mergeCells('D1:H1'); ws.getCell('D1').value = b.proyecto
+  ws.mergeCells('D2:H2'); ws.getCell('D2').value = `Cliente: ${b.cliente || '—'}`
+  ws.mergeCells('D3:H3'); ws.getCell('D3').value = `Periodo: ${fmtDate(b.periodFrom)} — ${fmtDate(b.periodTo)}`
   ;['D1', 'D2', 'D3'].forEach((c, i) => { const x = ws.getCell(c); x.alignment = { horizontal: 'right' }; x.font = { size: i ? 10 : 11, bold: !i, color: { argb: i ? 'FF555555' : NAVY } } })
-  for (let c = 1; c <= 7; c++) ws.getCell(4, c).border = { bottom: { style: 'medium', color: { argb: 'FF16A34A' } } }
+  for (let c = 1; c <= 8; c++) ws.getCell(4, c).border = { bottom: { style: 'medium', color: { argb: 'FF16A34A' } } }
 
-  ws.mergeCells('A6:G6'); ws.getCell('A6').value = b.titulo; ws.getCell('A6').font = { size: 16, bold: true, color: { argb: NAVY } }
+  ws.mergeCells('A6:H6'); ws.getCell('A6').value = b.titulo; ws.getCell('A6').font = { size: 16, bold: true, color: { argb: NAVY } }
   let r = 8
-  const titulo = t => { ws.mergeCells(r, 1, r, 7); const c = ws.getCell(r, 1); c.value = t; c.font = { size: 12, bold: true, color: { argb: NAVY } }; c.border = { left: { style: 'thick', color: { argb: 'FF16A34A' } } }; r += 1 }
+  const titulo = t => { ws.mergeCells(r, 1, r, 8); const c = ws.getCell(r, 1); c.value = t; c.font = { size: 12, bold: true, color: { argb: NAVY } }; c.border = { left: { style: 'thick', color: { argb: 'FF16A34A' } } }; r += 1 }
 
   // Pares etiqueta | valor en dos columnas: (A:B | C:D) y (E:F | G), como tarjetas en renglones
   const par = (fila, lado, etq, valor, numFmt, color) => {
@@ -55,23 +55,28 @@ export async function libroBreve(ExcelJS, hoja, logo, elaboradoPor = '') {
   if (!b.bloques.length) { ws.getCell(r, 1).value = 'Esta estimación todavía no tiene conceptos cobrados.'; ws.getCell(r, 1).font = { italic: true, color: { argb: GRIS } }; r += 1 }
   for (const bl of b.bloques) {
     r += 1
-    ws.mergeCells(r, 1, r, 7)
+    ws.mergeCells(r, 1, r, 8)
     const d = ws.getCell(r, 1); d.value = `${bl.nombre} — Estimable: ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: b.moneda }).format(bl.estimable)}`
     d.font = { bold: true, size: 10, color: { argb: NAVY } }; d.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FONDO } }; d.border = { left: { style: 'thick', color: { argb: 'FF16A34A' } } }
     r += 1
-    const enc = ws.getRow(r); enc.values = ['CLAVE', 'DESCRIPCIÓN', 'MONTO TOTAL', 'ANT. ANTERIOR', 'ESTA EST.', 'ACUMULADO', 'POR ESTIMAR']
+    const enc = ws.getRow(r); enc.values = ['CLAVE', 'DESCRIPCIÓN', 'MONTO TOTAL', 'ANT. ANTERIOR', 'ESTA EST.', 'ACUMULADO', 'POR ESTIMAR', '% AVANCE']
     enc.eachCell((c, i) => { c.font = { size: 8, bold: true, color: { argb: 'FF52606D' } }; c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: FONDO } }; c.alignment = { horizontal: i > 2 ? 'right' : 'left', vertical: 'middle', wrapText: true }; c.border = { bottom: { style: 'medium', color: { argb: LINEA } } } })
     r += 1
     for (const f of bl.filas) {
       const row = ws.getRow(r)
-      row.values = [f.clave + (f.finiquito ? ' (FIN)' : ''), f.concepto, f.monto, f.anterior, f.esta, f.acumulado, f.porEstimar]
+      row.values = [f.clave + (f.finiquito ? ' (FIN)' : ''), f.concepto, f.monto, f.anterior, f.esta, f.acumulado, f.porEstimar, f.avance == null ? '—' : f.avance]
       row.eachCell((c, i) => {
         c.font = { size: 9, bold: i === 1 || i === 5, color: { argb: i === 5 ? VERDE : NAVY } }
         c.alignment = { vertical: 'top', wrapText: i === 2, horizontal: i > 2 ? 'right' : 'left' }
-        if (i > 2) c.numFmt = fmt
+        if (i > 2 && i < 8) c.numFmt = fmt
+        if (i === 8) c.numFmt = '0.##%'
         c.border = borde
         if (f.finiquito) c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }
       })
+      if (f.nota) {
+        const d = row.getCell(2)
+        d.value = { richText: [{ text: f.concepto || '', font: { size: 9, color: { argb: NAVY } } }, { text: `\n${f.nota}`, font: { size: 8, italic: true, color: { argb: 'FFB7791F' } } }] }
+      }
       r += 1
     }
   }
