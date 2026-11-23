@@ -8,7 +8,7 @@ const sinMonto = c => !(c.monto > 0)
  * Con `estimado` (meses pasados o el mes en curso) marca qué se estimó de verdad y el cumplimiento.
  * conceptos: [{ k, area, clave, texto, monto, quien }]; estimado: { k: $ } o null
  */
-export default function TarjetaProyeccion({ p, lider, equipo = [], conceptos, estimado = null, alAbrir, alAgregar = null, cerrado = false }) {
+export default function TarjetaProyeccion({ p, lider, equipo = [], conceptos, estimado = null, alAbrir, alAgregar = null, cerrado = false, aviso = null }) {
   // Lo que se estimó en el mes de conceptos que no estaban proyectados
   const fuera = estimado ? Object.entries(estimado).filter(([k]) => !conceptos.some(c => c.k === k)).reduce((s, [, v]) => s + v, 0) : 0
   const conMonto = conceptos.filter(c => !sinMonto(c))
@@ -43,6 +43,7 @@ export default function TarjetaProyeccion({ p, lider, equipo = [], conceptos, es
             : <div className="sub">{conMonto.length} {conMonto.length === 1 ? 'concepto' : 'conceptos'}</div>}
         </div>
       </div>
+      {aviso && <div className="aviso-estado">⚠ {aviso}</div>}
       {conMonto.length > 0 && <ul className="conceptos">{conMonto.map(fila)}</ul>}
       {faltan.length > 0 && (
         <details className="faltan" open={conMonto.length === 0}>
