@@ -88,7 +88,7 @@ export default function Estimation() {
   // Guardado de conceptos: un temporizador por concepto (antes era uno solo y se perdían cambios)
   const saveTimers      = useRef({})
   const pendientes      = useRef({}) // { concept_id: item } aún sin guardar
-  const [proyectados, setProyectados] = useState({ ids: new Set(), faltan: [], auto: 0, total: 0 })
+  const [proyectados, setProyectados] = useState({ ids: new Set(), lista: [], libres: new Set() })
   const reportSaveTimer = useRef(null)
   const reportInsert    = useRef(null)
   const reportRef       = useRef(null)
@@ -168,15 +168,16 @@ export default function Estimation() {
     }
 
     // Proyecciones del mes: se sugieren (etiqueta "Proyectado" y botón para marcarlas); nada se marca solo
-    let infoProyectados = { ids: new Set(), faltan: [], auto: 0, total: 0 }
+    let infoProyectados = { ids: new Set(), lista: [], libres: new Set() }
     if (est.status === 'Borrador') {
       const mesEst = mesDelPeriodo(est.period_from, est.period_to)
-      const { data: prs } = await supabase.from('proyecciones').select('concept_id, monto').eq('project_id', id).eq('mes', mesEst).not('concept_id', 'is', null)
+      const { data: prs } = await supabase.from('proyecciones').select('id, concept_id, area, descripcion, monto, tbd').eq('project_id', id).eq('mes', mesEst)
       if (prs?.length) {
+        // "Libres": conceptos que no se han cobrado nada (se pueden marcar completos)
         const libres = new Set(conceptosPorEstimar(projRes.data, discs, allEsts.filter(e => e.id !== est.id)).filter(x => x.porEstimar >= x.monto - 0.5).map(x => x.concept.id))
-        const ids = new Set(prs.map(x => x.concept_id))
-        const faltan = [...ids].filter(cid => libres.has(cid) && !itemMap[cid]?.included)
-        infoProyectados = { ids, faltan, auto: 0, total: 0 }
+        const orden = new Map(discs.flatMap(d => d.concepts.map(c => c.id)).map((cid, i) => [cid, i]))
+        const lista = [...prs].sort((a, b) => (orden.get(a.concept_id) ?? 1e6) - (orden.get(b.concept_id) ?? 1e6))
+        infoProyectados = { ids: new Set(prs.map(x => x.concept_id).filter(Boolean)), lista, libres }
       }
     }
     setProyectados(infoProyectados)
@@ -264,13 +265,16 @@ export default function Estimation() {
   useEffect(() => () => { if (estimation?.id) guardarPendientes() }, [estimation?.id])
 
   // Marca los conceptos proyectados para este mes que faltan (botón, cuando el borrador ya tenía conceptos)
+  // Proyectados del mes que todavía se pueden marcar (sin cobrar nada antes y sin marcar)
+  const porMarcar = () => proyectados.lista.filter(p => p.concept_id && proyectados.libres.has(p.concept_id) && !items[p.concept_id]?.included)
+  function marcarConcepto(cid) {
+    const found = disciplines.flatMap(d => d.concepts.map(c => [c, d])).find(([c]) => c.id === cid)
+    if (found) scheduleItemSave(cid, { ...items[cid], included: true }, found[1], found[0])
+  }
   function marcarProyectados() {
-    for (const cid of proyectados.faltan) {
-      const found = disciplines.flatMap(d => d.concepts.map(c => [c, d])).find(([c]) => c.id === cid)
-      if (found) scheduleItemSave(cid, { ...items[cid], included: true }, found[1], found[0])
-    }
-    toast(`${proyectados.faltan.length} conceptos proyectados marcados ✓`)
-    setProyectados(p => ({ ...p, faltan: [] }))
+    const lista = porMarcar()
+    for (const p of lista) marcarConcepto(p.concept_id)
+    toast(`${lista.length} ${lista.length === 1 ? 'concepto proyectado marcado' : 'conceptos proyectados marcados'} ✓`)
   }
 
   async function upsertItem(estId, conceptId, item) {
@@ -665,18 +669,52 @@ export default function Estimation() {
             </div>
           </div>
 
-          {/* Lo proyectado para este mes */}
-          {estimation.status === 'Borrador' && proyectados.faltan.length > 0 && (
-            <div className="card mb-md no-print" style={{ borderLeft: '4px solid var(--green)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 16px' }}>
-              <span style={{ fontSize: 13 }}>
-                Hay <strong>{proyectados.faltan.length} {proyectados.faltan.length === 1 ? 'concepto proyectado' : 'conceptos proyectados'}</strong> para este mes que no {proyectados.faltan.length === 1 ? 'está marcado' : 'están marcados'} (etiqueta "Proyectado"). Márcalos si sí se van a cobrar.
-              </span>
-              <span className="flex gap-sm">
-                {proyectados.faltan.length > 0 && !readonly && <button className="btn btn-sm btn-primary" onClick={marcarProyectados}>Marcar los proyectados</button>}
-                <button className="btn btn-sm btn-outline" onClick={() => navigate(`/projects/${id}/proyecciones`)}>Ver proyecciones</button>
-              </span>
-            </div>
-          )}
+          {/* Lo proyectado para este mes: lista compacta con su estado y botón para marcar */}
+          {estimation.status === 'Borrador' && proyectados.lista.length > 0 && (() => {
+            const faltan = porMarcar()
+            const total = proyectados.lista.reduce((x, p) => x + (+p.monto || 0), 0)
+            const conceptoDe = cid => { for (const d of disciplines) { const c = d.concepts.find(c => c.id === cid); if (c) return c } return null }
+            const estado = p => {
+              if (!p.concept_id) return ['Sin concepto ligado', 'var(--text-soft)']
+              if (items[p.concept_id]?.included) return ['✓ Marcado', 'var(--green-dark)']
+              if (!proyectados.libres.has(p.concept_id)) return ['Ya se cobró una parte', 'var(--warning)']
+              return ['Por marcar', 'var(--text-muted)']
+            }
+            const colorArea = { 'Consultoría': '#2a78d6', 'Commissioning': '#eb6834', 'Modelación': '#1baf7a' }
+            return (
+              <div className="card mb-md no-print proyectados-mes" style={{ borderLeft: '4px solid var(--green)', padding: '10px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13 }}>
+                    <strong>Proyectado para este mes:</strong> {proyectados.lista.length} {proyectados.lista.length === 1 ? 'concepto' : 'conceptos'} · {fmtMoney(total, project.currency)}
+                    {faltan.length > 0 ? <span style={{ color: 'var(--text-muted)' }}> · {faltan.length} sin marcar</span> : <span style={{ color: 'var(--green-dark)' }}> · todo marcado ✓</span>}
+                  </span>
+                  <span className="flex gap-sm">
+                    {faltan.length > 0 && !readonly && <button className="btn btn-sm btn-primary" onClick={marcarProyectados}>Marcar los proyectados</button>}
+                    <button className="btn btn-sm btn-outline" onClick={() => navigate(`/projects/${id}/proyecciones`)}>Ver proyecciones</button>
+                  </span>
+                </div>
+                <table className="tabla-proyectados">
+                  <tbody>
+                    {proyectados.lista.map(p => {
+                      const c = p.concept_id && conceptoDe(p.concept_id)
+                      const [txt, color] = estado(p)
+                      const texto = c ? c.description : p.descripcion
+                      return (
+                        <tr key={p.id}>
+                          <td className="clave">{c ? c.key : ''}</td>
+                          <td className="desc" title={texto}>{texto || '—'}</td>
+                          <td className="area"><span style={{ background: colorArea[p.area] }} />{p.area}</td>
+                          <td className="num">{p.tbd && !(+p.monto > 0) ? 'Por definir' : fmtMoney(p.monto, project.currency)}</td>
+                          <td className="estado" style={{ color }}>{txt}</td>
+                          <td className="accion">{!readonly && txt === 'Por marcar' && <button className="btn-link-mini" onClick={() => marcarConcepto(p.concept_id)}>Marcar</button>}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
 
           {/* Resumen Financiero */}
           <div className="section">
