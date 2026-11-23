@@ -18,7 +18,7 @@ const NAV = [
   ['/', 'proyectos', 'Proyectos', p => p === '/' || p.startsWith('/projects')],
   ['/dashboard', 'dashboard', 'Dashboard', p => p.startsWith('/dashboard')],
   ['/proyecciones', 'proyecciones', 'Proyecciones', p => p.startsWith('/proyecciones')],
-  ['/checador', 'checador', 'Checador', p => p.startsWith('/checador'), true],
+  ['/checador', 'checador', 'Checador', p => p.startsWith('/checador')],
   ['/track', 'track', 'Track', p => p.startsWith('/track'), true],
   ['/directorio', 'directorio', 'Directorio', p => p.startsWith('/directorio')],
 ]
