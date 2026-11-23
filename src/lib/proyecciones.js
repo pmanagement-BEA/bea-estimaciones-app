@@ -139,3 +139,42 @@ export function responsables(projects, miembros, nombrePorEmail = {}) {
   }
   return out
 }
+
+/** Lo estimado de verdad por mes y concepto: { 'YYYY-MM': { concept_id: $ } } (misma regla que estimadoPorMes). */
+export function estimadoPorConcepto(project, disciplines, estimations) {
+  const rates = projectRates(project)
+  const out = {}
+  const porConcepto = new Map()
+  for (const d of disciplines) for (const c of d.concepts || []) porConcepto.set(c.id, [c, d])
+  const enviadas = estimations.filter(e => e.status === 'Enviada')
+  const primera = enviadas.reduce((a, e) => (!a || (e.number || 0) < (a.number || 0) ? e : a), null)
+  const acumuladaDeArranque = primera && (primera.number || 0) > 1 ? primera.id : null
+  for (const e of enviadas) {
+    if (e.id === acumuladaDeArranque) continue
+    const mes = mesDelPeriodo(e.period_from, e.period_to)
+    if (!mes) continue
+    for (const it of e.estimation_items || []) {
+      if (!it.included) continue
+      const cd = porConcepto.get(it.concept_id); if (!cd) continue
+      out[mes] ||= {}; out[mes][it.concept_id] = (out[mes][it.concept_id] || 0) + itemAmount(it, cd[0], cd[1], rates, disciplines)
+    }
+  }
+  return out
+}
+
+/**
+ * Versiones de la proyección de un mes según el historial: después de cada día con cambios, cuánto había proyectado.
+ * historial: filas de proyecciones_historial (de cualquier mes). Devuelve [{ dia, total, sinMonto, cambios: [fila] }]
+ */
+export function versionesDelMes(historial, mes) {
+  const toca = historial.filter(h => h.mes === mes || h.mes_antes === mes).sort((a, b) => String(a.hecho_en).localeCompare(String(b.hecho_en)) || a.id - b.id)
+  const vivo = new Map() // proyeccion_id → fila vigente en este mes
+  const porDia = new Map()
+  for (const h of toca) {
+    if (h.accion !== 'baja' && h.mes === mes) vivo.set(h.proyeccion_id, h); else vivo.delete(h.proyeccion_id)
+    const dia = String(h.hecho_en).slice(0, 10)
+    const filas = [...vivo.values()]
+    porDia.set(dia, { dia, total: filas.reduce((s, f) => s + (f.tbd && !(+f.monto > 0) ? 0 : +f.monto || 0), 0), sinMonto: filas.filter(f => f.tbd && !(+f.monto > 0)).length, cambios: [...(porDia.get(dia)?.cambios || []), h] })
+  }
+  return [...porDia.values()]
+}
