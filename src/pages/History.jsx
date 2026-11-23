@@ -85,6 +85,7 @@ export default function History() {
             + Nueva / Borrador actual
           </button>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/setup`)}>⚙ Configuración</button>
+          <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/proyecciones`)}>📈 Proyecciones</button>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/aditivas`)}>📋 Aditivas</button>
         </div>
       </div>

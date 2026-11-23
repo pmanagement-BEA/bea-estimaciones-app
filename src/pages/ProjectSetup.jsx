@@ -494,6 +494,7 @@ export default function ProjectSetup() {
           {project.status === 'Activo' && (
             <button className="btn btn-primary" onClick={goToEstimation}>Estimación del mes →</button>
           )}
+          <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/proyecciones`)}>📈 Proyecciones</button>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/aditivas`)}>📋 Aditivas</button>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/history`)}>Historial</button>
           <button className="btn btn-danger" onClick={() => setModal({

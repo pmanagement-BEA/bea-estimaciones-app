@@ -41,7 +41,21 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .brand-mark{font-weight:800;font-size:22px;letter-spacing:.5px;position:relative;padding-right:14px}
 .brand-mark::after{content:"";position:absolute;right:0;top:4px;width:10px;height:10px;background:var(--green);transform:skewX(-15deg);border-radius:2px}
 .brand-sub{font-size:11px;color:rgba(255,255,255,.65);letter-spacing:1.5px;text-transform:uppercase;padding-left:14px;border-left:1px solid rgba(255,255,255,.25)}
-.topbar-actions{display:flex;gap:8px;align-items:center}
+.topbar-actions{display:flex;gap:10px;align-items:center}
+.topbar{gap:16px;flex-wrap:wrap}
+.topbar-nav{display:flex;gap:4px;align-items:center;background:rgba(0,0,0,.14);padding:4px;border-radius:12px}
+.nav-btn{display:inline-flex;align-items:center;gap:7px;background:transparent;border:0;color:rgba(255,255,255,.82);font:inherit;font-size:13px;font-weight:600;padding:7px 12px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s}
+.nav-btn:hover{background:rgba(255,255,255,.12);color:#fff}
+.nav-btn:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.nav-btn.activo{background:#fff;color:var(--green-dark);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.nav-btn.salir{font-weight:500;color:rgba(255,255,255,.72)}
+.usuario{display:flex;align-items:center;gap:8px}
+.avatar{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;letter-spacing:.5px}
+.usuario-datos{display:flex;flex-direction:column;line-height:1.15}
+.usuario-nombre{font-size:12px;font-weight:600;color:#fff;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.usuario-rol{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.65)}
+@media (max-width: 1100px){ .usuario-datos{display:none} .brand-sub{display:none} }
+@media (max-width: 760px){ .topbar{padding:8px 12px} .nav-btn span{display:none} .nav-btn{padding:8px 10px} }
 .status-pill{font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:4px 10px;border-radius:99px;background:rgba(22,163,74,.18);color:#86efac;border:1px solid rgba(22,163,74,.3)}
 .status-pill.dirty{background:rgba(183,121,31,.2);color:#fcd34d;border-color:rgba(183,121,31,.35)}
 
