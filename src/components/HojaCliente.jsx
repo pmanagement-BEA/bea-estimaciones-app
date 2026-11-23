@@ -117,7 +117,7 @@ export default function HojaCliente({ hoja }) {
               out.push(
                 <tr key={'f' + bi + '-' + i}>
                   <td style={{ ...c, textAlign: 'center' }}>{r.clave}</td>
-                  <td style={c}>{r.concepto}</td>
+                  <td style={c}>{r.concepto}{r.nota && <div style={{ fontSize: 9, fontStyle: 'italic', color: '#B7791F' }}>{r.nota}</div>}</td>
                   <td style={{ ...c, whiteSpace: 'pre-line', fontSize: 9 }}>{r.entregable}</td>
                   <td style={{ ...c, ...num }}>{r.finiquito ? 'FINIQUITO' : m(r.monto)}</td>
                   <td style={cap}>{pa.toFixed(2)}</td>

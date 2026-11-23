@@ -1,5 +1,6 @@
 import { fmtMoney, fmtPct, fmtDate } from '../utils/format'
 import { armarBreve } from '../lib/estimacionBreve'
+import { pctTexto } from '../lib/hoja'
 
 const BASE = import.meta.env.BASE_URL || '/'
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -51,19 +52,20 @@ export default function EstimacionBreve({ hoja, elaboradoPor }) {
               <tr>
                 <th>Clave</th><th>Descripción</th>
                 <th className="num">Monto total</th><th className="num">Ant. anterior</th><th className="num">Esta est.</th>
-                <th className="num">Acumulado</th><th className="num">Por estimar</th>
+                <th className="num">Acumulado</th><th className="num">Por estimar</th><th className="num">% Avance</th>
               </tr>
             </thead>
             <tbody>
               {bl.filas.map((f, j) => (
                 <tr key={j} className={f.finiquito ? 'fin' : ''}>
                   <td><strong>{f.clave}</strong>{f.finiquito && <span className="eb-tag">FIN</span>}</td>
-                  <td>{f.concepto}</td>
+                  <td>{f.concepto}{f.nota && <div className="eb-nota">{f.nota}</div>}</td>
                   <td className="num">{m(f.monto)}</td>
                   <td className="num">{m(f.anterior)}</td>
                   <td className="num verde">{m(f.esta)}</td>
                   <td className="num">{m(f.acumulado)}</td>
                   <td className="num">{m(f.porEstimar)}</td>
+                  <td className="num">{f.avance == null ? '—' : pctTexto(f.avance)}</td>
                 </tr>
               ))}
             </tbody>
