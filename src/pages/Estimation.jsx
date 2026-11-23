@@ -8,6 +8,9 @@ import { disciplineSubtotal, conceptAmount, itemAmount, estimationSummary, proje
 import { fetchEstadoAreas, marcarAreaLista, quitarAreaLista, permisosProyecto } from '../lib/cierre'
 import { corteDeEstimacion, fmtCorte, textoCorte, diasParaCorte, periodoBorrador, seEncima, moverPeriodo, inicioDelPeriodo, fechaLocal, mesDelPeriodo } from '../utils/cierre'
 import HojaCliente, { armarHoja, descargarExcel } from '../components/HojaCliente'
+import EstimacionBreve from '../components/EstimacionBreve'
+import { descargarBreve } from '../lib/estimacionBreveExcel'
+import { nombreBreve } from '../lib/estimacionBreve'
 import { cargarExcelJS } from '../lib/cargarModulo'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
@@ -65,6 +68,7 @@ export default function Estimation() {
   const [loading, setLoading]         = useState(true)
   const [saving, setSaving]           = useState(false)
   const [activeTab, setActiveTab]     = useState('estimation')
+  const [vistaCliente, setVistaCliente] = useState('completa') // hoja completa RC-OP-11 o versión breve
   // Al abrir la hoja para cliente se precarga ExcelJS: la descarga sale al instante
   useEffect(() => { if (activeTab === 'cliente') cargarExcelJS().catch(() => {}) }, [activeTab])
   const [modal, setModal]             = useState(null)
@@ -899,6 +903,8 @@ export default function Estimation() {
             <div className="flex" style={{ gap: 8 }}>
               <button className="btn btn-outline" onClick={() => descargarExcel(hoja).catch(e => toast('No se pudo generar el Excel: ' + e.message, true))}>⬇ Descargar Excel</button>
               <button className="btn btn-outline" onClick={() => imprimirHoja(hoja)}>📄 Imprimir / PDF</button>
+              <button className="btn btn-outline" title="Solo los conceptos cobrados en esta estimación" onClick={() => descargarBreve(hoja, equipo.lider).catch(e => toast('No se pudo generar el Excel breve: ' + e.message, true))}>⬇ Excel breve</button>
+              <button className="btn btn-outline" title="Solo los conceptos cobrados en esta estimación" onClick={() => imprimirBreve(hoja)}>📄 PDF breve</button>
               {estimation.status === 'Borrador' && perms.todo && (
                 <button className="btn btn-primary" onClick={() => setModal({
                   title: '✉ Marcar Estimación como Enviada',
@@ -910,7 +916,14 @@ export default function Estimation() {
             </div>
           </div>
           <FormatosCliente project={project} conceptos={conceptosCliente} periodo={periodo} puedeAdministrar={perms.todo && !soloLectura} />
-          <HojaCliente hoja={hoja} />
+          <div className="no-print" style={{ display: 'flex', gap: 6, margin: '4px 0 10px' }}>
+            <button className={`btn btn-sm ${vistaCliente === 'completa' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setVistaCliente('completa')}>Hoja completa (RC-OP-11)</button>
+            <button className={`btn btn-sm ${vistaCliente === 'breve' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setVistaCliente('breve')}>Versión breve</button>
+          </div>
+          {vistaCliente === 'completa' && <HojaCliente hoja={hoja} />}
+          <div className={vistaCliente === 'breve' ? '' : 'eb-oculta'}>
+            <EstimacionBreve hoja={hoja} elaboradoPor={equipo.lider} />
+          </div>
         </div>
       )}
 
@@ -1348,6 +1361,18 @@ function TogglPreview({ rows, onChange }) {
       </div>
     </div>
   )
+}
+
+// Imprime la versión breve (carta vertical, solo los conceptos cobrados en esta estimación).
+function imprimirBreve(hoja) {
+  const body = document.body
+  const titulo = document.title
+  const fin = () => { body.classList.remove('imprimiendo-breve'); document.title = titulo; window.removeEventListener('afterprint', fin) }
+  body.classList.add('imprimiendo-breve')
+  document.title = nombreBreve(hoja)
+  window.addEventListener('afterprint', fin)
+  window.print()
+  setTimeout(fin, 1000)
 }
 
 // Imprime solo la hoja RC-OP-11 (doble carta horizontal, como el Excel) y no la pantalla completa.
