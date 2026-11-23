@@ -15,7 +15,7 @@ const Icono = ({ n }) => (
 )
 
 const NAV = [
-  ['/', 'proyectos', 'Proyectos', p => p === '/' || p.startsWith('/projects')],
+  ['/', 'proyectos', 'Estimaciones', p => p === '/' || p.startsWith('/projects')],
   ['/dashboard', 'dashboard', 'Dashboard', p => p.startsWith('/dashboard')],
   ['/proyecciones', 'proyecciones', 'Proyecciones', p => p.startsWith('/proyecciones')],
   ['/checador', 'checador', 'Checador', p => p.startsWith('/checador')],
@@ -31,8 +31,9 @@ export default function TopBar({ profile, onSignOut }) {
   return (
     <div className="topbar">
       <div className="brand" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
-        <span className="brand-mark">BEA</span>
-        <span className="brand-sub">Estimaciones de Proyectos</span>
+        <img className="brand-logo" src={`${import.meta.env.BASE_URL}bea_logo_blanco.png`} alt="BEA · Bioconstrucción y Energía Alternativa" />
+        <img className="brand-simbolo" src={`${import.meta.env.BASE_URL}bea_simbolo_blanco.png`} alt="BEA" />
+        <span className="brand-sub">BEApp</span>
       </div>
       <nav className="topbar-nav" aria-label="Secciones">
         {NAV.map(([to, icono, texto, activo, enObra]) => (
