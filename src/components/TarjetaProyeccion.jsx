@@ -8,7 +8,7 @@ const sinMonto = c => !(c.monto > 0)
  * Con `estimado` (meses pasados o el mes en curso) marca qué se estimó de verdad y el cumplimiento.
  * conceptos: [{ k, area, clave, texto, monto, quien }]; estimado: { k: $ } o null
  */
-export default function TarjetaProyeccion({ p, lider, conceptos, estimado = null, alAbrir, cerrado = false }) {
+export default function TarjetaProyeccion({ p, lider, equipo = [], conceptos, estimado = null, alAbrir, alAgregar = null, cerrado = false }) {
   // Lo que se estimó en el mes de conceptos que no estaban proyectados
   const fuera = estimado ? Object.entries(estimado).filter(([k]) => !conceptos.some(c => c.k === k)).reduce((s, [, v]) => s + v, 0) : 0
   const conMonto = conceptos.filter(c => !sinMonto(c))
@@ -34,6 +34,7 @@ export default function TarjetaProyeccion({ p, lider, conceptos, estimado = null
         <div>
           <a onClick={alAbrir} className="nombre">{p.name}</a>
           <div className="sub">{lider ? <>Responsable: <strong>{lider}</strong></> : <span style={{ color: 'var(--text-soft)' }}>Sin líder asignado</span>}{moneda === 'USD' && ' · USD'}</div>
+          {equipo.length > 0 && <div className="sub equipo">Equipo: {equipo.join(' · ')}</div>}
         </div>
         <div className="totales">
           <div className="total">{fmtMoney(total, moneda)}</div>
@@ -49,6 +50,7 @@ export default function TarjetaProyeccion({ p, lider, conceptos, estimado = null
           <ul className="conceptos">{faltan.map(fila)}</ul>
         </details>
       )}
+      {alAgregar && <button className="btn-agregar" onClick={alAgregar}>＋ Agregar concepto a este mes</button>}
       {fuera > 0.5 && <div className="fuera">+ {fmtMoney(fuera, moneda)} estimado de conceptos que no estaban proyectados</div>}
     </div>
   )

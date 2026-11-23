@@ -6,11 +6,12 @@ import { useAjeno, AVISO_AJENO } from '../hooks/useAjeno'
 import { isReadOnlyRole } from '../lib/directorio'
 import { toast } from '../components/Toast'
 import GraficaProyecciones from '../components/GraficaProyecciones'
+import FormProyeccion from '../components/FormProyeccion'
 import { fmtMoney } from '../utils/format'
 import { mesDelPeriodo } from '../utils/cierre'
 import {
   AREAS, COLOR_AREA, mesIso, sumarMeses, textoMes, mesFactura, rangoMeses, prepararProyecto,
-  estimadoPorMes, conceptosPorEstimar, sumarProyecciones, estaCongelada, textoCongelamiento, quienProyecta, responsables,
+  estimadoPorMes, conceptosPorEstimar, sumarProyecciones, estaCongelada, textoCongelamiento, quienProyecta, responsables, equipos,
 } from '../lib/proyecciones'
 
 const Chip = ({ area }) => (
@@ -27,7 +28,6 @@ export default function ProyeccionesProyecto() {
   const [project, setProject] = useState(null)
   const [filas, setFilas] = useState([])
   const [form, setForm] = useState(null)
-  const [guardando, setGuardando] = useState(false)
   const [gente, setGente] = useState({ nombrePorEmail: {}, lider: '' })
   const ajeno = useAjeno(project, profile)
   const soloLectura = isReadOnlyRole(profile) || ajeno
@@ -41,7 +41,7 @@ export default function ProyeccionesProyecto() {
       supabase.from('directorio').select('nombre, email'),
     ])
     const nombrePorEmail = Object.fromEntries((di.data || []).filter(d => d.email).map(d => [d.email.toLowerCase(), d.nombre]))
-    if (!p.error) setGente({ nombrePorEmail, lider: responsables([p.data], mi.data || [], nombrePorEmail)[p.data.id] })
+    if (!p.error) setGente({ nombrePorEmail, lider: responsables([p.data], mi.data || [], nombrePorEmail)[p.data.id], equipo: equipos([p.data], mi.data || [], nombrePorEmail)[p.data.id] })
     if (p.error) { toast('No se pudo cargar el proyecto', true); return }
     setProject(p.data)
     setFilas(pr.error ? [] : pr.data || [])
@@ -74,34 +74,14 @@ export default function ProyeccionesProyecto() {
   for (const e of datos.estimations) if (e.status === 'Enviada') for (const it of e.estimation_items || []) if (it.included) cobrado.set(it.concept_id, mesDelPeriodo(e.period_from, e.period_to))
 
   function nueva() {
-    setForm({ mes: mesesAbiertos[0], concept_id: '', area: 'Consultoría', descripcion: '', monto: '', tbd: false })
+    setForm({ mes: mesesAbiertos[0] }); window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  function elegirConcepto(cid) {
-    const x = pendientes.find(p => p.concept.id === cid)
-    setForm(f => ({ ...f, concept_id: cid, area: x ? x.area : f.area, descripcion: x ? `${x.concept.key} ${x.concept.description}`.trim() : f.descripcion, monto: x ? Math.round(x.porEstimar * 100) / 100 : f.monto }))
-  }
-
-  async function guardar() {
-    if (!form.tbd && !(+form.monto > 0)) { toast('Escribe el monto (o marca "Por definir")', true); return }
-    if (!form.concept_id && !form.descripcion.trim()) { toast('Elige un concepto o escribe qué se va a cobrar', true); return }
-    setGuardando(true)
-    const fila = { project_id: id, mes: form.mes, area: form.area, concept_id: form.concept_id || null, descripcion: form.descripcion.trim(), monto: +form.monto || 0, tbd: !!form.tbd, updated_at: new Date().toISOString() }
-    const { error } = form.id
-      ? await supabase.from('proyecciones').update(fila).eq('id', form.id)
-      : await supabase.from('proyecciones').insert(fila)
-    setGuardando(false)
-    if (error) { toast(/proyecciones_concepto_mes/.test(error.message) ? 'Ese concepto ya está proyectado en ese mes' : 'No se pudo guardar: ' + error.message, true); return }
-    toast('Proyección guardada ✓')
-    setForm(null); cargar()
-  }
-
   async function borrar(f) {
     if (!window.confirm(`¿Quitar la proyección "${f.descripcion || 'sin descripción'}" de ${textoMes(f.mes)}?`)) return
     const { error } = await supabase.from('proyecciones').delete().eq('id', f.id)
     if (error) toast('No se pudo quitar: ' + error.message, true); else cargar()
   }
 
-  const yaProyectados = new Set(filas.filter(f => form && f.mes === form.mes && f.id !== form.id).map(f => f.concept_id).filter(Boolean))
 
   const tarjetaMes = m => {
         // Primero lo que trae monto, al final lo que está por definir
@@ -159,7 +139,7 @@ export default function ProyeccionesProyecto() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h1 className="page-title">Proyecciones <span style={{ color: 'var(--green-dark)' }}>de cobro</span></h1>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{project.name}{project.client ? ` · ${project.client}` : ''} · Responsable: <strong style={{ color: 'var(--navy)' }}>{gente.lider || 'sin líder asignado'}</strong></div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{project.name}{project.client ? ` · ${project.client}` : ''} · Responsable: <strong style={{ color: 'var(--navy)' }}>{gente.lider || 'sin líder asignado'}</strong>{gente.equipo?.length ? ` · Equipo: ${gente.equipo.join(' · ')}` : ''}</div>
         </div>
         <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/estimations/current`)}>Estimación del mes</button>
@@ -182,57 +162,8 @@ export default function ProyeccionesProyecto() {
       </div>
 
       {form && (
-        <div className="card mb-md" style={{ borderLeft: '4px solid var(--green)' }}>
-          <div className="section-header"><span className="section-title">{form.id ? 'Cambiar proyección' : 'Nueva proyección'}</span></div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-            <div className="field">
-              <label>Mes de la estimación</label>
-              <select value={form.mes} onChange={e => setForm(f => ({ ...f, mes: e.target.value }))}>
-                {mesesAbiertos.map(m => <option key={m} value={m}>{textoMes(m)}</option>)}
-              </select>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Se factura en {textoMes(mesFactura(form.mes))} · se congela el {textoCongelamiento(form.mes)}</div>
-            </div>
-            <div className="field" style={{ gridColumn: 'span 2' }}>
-              <label>Concepto por cobrar</label>
-              <select value={form.concept_id} onChange={e => e.target.value ? elegirConcepto(e.target.value) : setForm(f => ({ ...f, concept_id: '' }))}>
-                <option value="">— Otro (sin concepto: escribe la descripción) —</option>
-                {datos.disciplines.map(d => {
-                  const ps = pendientes.filter(p => p.discipline.id === d.id && (!yaProyectados.has(p.concept.id) || p.concept.id === form.concept_id))
-                  if (!ps.length) return null
-                  return (
-                    <optgroup key={d.id} label={d.name}>
-                      {ps.map(p => <option key={p.concept.id} value={p.concept.id}>{p.concept.key} · {(p.concept.description || '').slice(0, 70)} — {fmtMoney(p.porEstimar, moneda)}</option>)}
-                    </optgroup>
-                  )
-                })}
-              </select>
-              {form.concept_id && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Se sugiere en la estimación de {textoMes(form.mes)} (un clic para marcarlo).</div>}
-            </div>
-            <div className="field">
-              <label>Área</label>
-              <select value={form.area} disabled={!!form.concept_id} onChange={e => setForm(f => ({ ...f, area: e.target.value }))}>
-                {AREAS.map(a => <option key={a} value={a}>{a}</option>)}
-              </select>
-            </div>
-            {!form.concept_id && (
-              <div className="field" style={{ gridColumn: 'span 2' }}>
-                <label>Descripción</label>
-                <input value={form.descripcion} placeholder="Ej. Hito 2: pruebas funcionales" onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} />
-              </div>
-            )}
-            <div className="field">
-              <label>Monto</label>
-              <input type="number" min="0" step="0.01" value={form.monto} disabled={form.tbd} onChange={e => setForm(f => ({ ...f, monto: e.target.value }))} />
-              <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, textTransform: 'none', letterSpacing: 0 }}>
-                <input type="checkbox" checked={form.tbd} onChange={e => setForm(f => ({ ...f, tbd: e.target.checked, monto: e.target.checked ? '' : f.monto }))} /> Por definir (sin monto todavía)
-              </label>
-            </div>
-          </div>
-          <div className="flex gap-sm" style={{ justifyContent: 'flex-end', marginTop: 12 }}>
-            <button className="btn btn-outline btn-sm" onClick={() => setForm(null)}>Cancelar</button>
-            <button className="btn btn-primary btn-sm" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>
-          </div>
-        </div>
+        <FormProyeccion key={form.id || 'nueva'} proyectos={[project]} inicial={{ ...form, project_id: id }} proyecciones={filas}
+          onGuardado={() => { setForm(null); cargar() }} onCancelar={() => setForm(null)} />
       )}
 
       {proximos.length === 0 && pasados.length === 0 ? (
