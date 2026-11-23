@@ -1,7 +1,7 @@
 // Proyecciones de cobro: lo que cada proyecto piensa estimar en los meses que vienen, por área.
 // mes = mes de ejecución (el periodo de la estimación); se factura al mes siguiente.
 import { AREAS, disciplineArea, conceptAmount, itemAmount, projectRates, getAcumuladoAnteriorMap } from '../utils/calculations.js'
-import { mesDelPeriodo } from '../utils/cierre.js'
+import { mesDelPeriodo, esHabil } from '../utils/cierre.js'
 
 export { AREAS }
 export const COLOR_AREA = { 'Consultoría': '#2a78d6', 'Commissioning': '#eb6834', 'Modelación': '#1baf7a' }
@@ -14,6 +14,19 @@ export const textoMes = mes => (mes ? `${MESES_LARGOS[+mes.slice(5, 7) - 1]} ${m
 export const textoMesCorto = mes => (mes ? `${MESES_CORTOS[+mes.slice(5, 7) - 1]} ${mes.slice(2, 4)}` : '')
 /** Se factura al mes siguiente de la ejecución */
 export const mesFactura = mes => sumarMeses(mes, 1)
+/**
+ * Día en que se congelan las proyecciones de un mes: el 15, o el siguiente día hábil si cae en fin de semana
+ * o festivo (misma regla que la base: public.fecha_congelamiento). Desde ese día ya no se cambian.
+ */
+export function fechaCongelamiento(mes) {
+  const [y, m] = mes.split('-').map(Number)
+  const d = new Date(y, m - 1, 15)
+  while (!esHabil(d)) d.setDate(d.getDate() + 1)
+  return d
+}
+export const estaCongelada = (mes, hoy = new Date()) => new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()) >= fechaCongelamiento(mes)
+export const textoCongelamiento = mes => fechaCongelamiento(mes).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })
+
 export function rangoMeses(desde, hasta) {
   const out = []
   for (let m = desde; m <= hasta && out.length < 120; m = sumarMeses(m, 1)) out.push(m)

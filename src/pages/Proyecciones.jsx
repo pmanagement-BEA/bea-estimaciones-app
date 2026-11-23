@@ -8,13 +8,9 @@ import GraficaProyecciones from '../components/GraficaProyecciones'
 import { fmtMoney } from '../utils/format'
 import {
   AREAS, COLOR_AREA, mesIso, sumarMeses, textoMes, textoMesCorto, rangoMeses, prepararProyecto, estimadoPorMes, sumarProyecciones,
+  estaCongelada, textoCongelamiento,
 } from '../lib/proyecciones'
 
-const RANGOS = [
-  ['proximos', 'Próximos 12 meses'],
-  ['anio', 'Este año'],
-  ['todo', 'Todo'],
-]
 
 const corto = v => (v ? `$${Math.round(v).toLocaleString('es-MX')}` : '')
 
@@ -23,7 +19,8 @@ export default function Proyecciones() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [datos, setDatos] = useState(null)
-  const [rango, setRango] = useState('proximos')
+  const [vista, setVista] = useState('proximas') // próximas (12 meses al futuro) o pasadas (archivo)
+  const [mesSel, setMesSel] = useState('') // '' = todos los meses de la vista
   const [estado, setEstado] = useState('Activo')
   const [area, setArea] = useState('Todas')
   const [porArea, setPorArea] = useState(false)
@@ -43,11 +40,12 @@ export default function Proyecciones() {
   useEffect(() => { if (profile?.email) fetchMyAssignments(profile.email).then(setMios) }, [profile?.email])
 
   const todos = useMemo(() => datos ? [...new Set(datos.proyecciones.map(f => f.mes))].sort() : [], [datos])
-  const meses = useMemo(() => {
-    if (rango === 'proximos') return rangoMeses(hoy, sumarMeses(hoy, 11))
-    if (rango === 'anio') return rangoMeses(`${hoy.slice(0, 4)}-01`, `${hoy.slice(0, 4)}-12`)
-    return todos.length ? rangoMeses(todos[0] < hoy ? todos[0] : hoy, todos.at(-1) > hoy ? todos.at(-1) : hoy) : [hoy]
-  }, [rango, todos, hoy])
+  // Próximas: este mes y los 11 que siguen (se recorre solo cada mes). Pasadas: desde la primera proyección hasta el mes anterior.
+  const opciones = useMemo(() => vista === 'proximas'
+    ? rangoMeses(hoy, sumarMeses(hoy, 11))
+    : (todos.length && todos[0] < hoy ? rangoMeses(todos[0], sumarMeses(hoy, -1)).reverse() : []), [vista, todos, hoy])
+  const meses = useMemo(() => (mesSel ? [mesSel] : [...opciones].sort()), [mesSel, opciones])
+  const pasadas = vista === 'pasadas'
 
   const filas = useMemo(() => {
     if (!datos) return []
@@ -79,8 +77,19 @@ export default function Proyecciones() {
   const totalArea = Object.fromEntries(areas.map(a => [a, meses.reduce((x, m) => x + (proyectado[m]?.[a] || 0), 0)]))
   const total = Object.values(totalArea).reduce((x, v) => x + v, 0)
   const mesActual = areas.reduce((x, a) => x + (proyectado[hoy]?.[a] || 0), 0)
-  const delMes = (s, m, a) => (a ? s.porMes[m]?.[a] || 0 : areas.reduce((x, k) => x + (s.porMes[m]?.[k] || 0), 0))
   const totalMes = m => areas.reduce((x, a) => x + (proyectado[m]?.[a] || 0), 0)
+  // Meses con estimaciones de un solo mes en los proyectos que se ven (lo de antes de la migración viene acumulado)
+  const mesesReales = new Set(filas.flatMap(({ est }) => Object.entries(est).filter(([, v]) => Object.values(v).some(x => x > 0)).map(([m]) => m)))
+  const conDatos = m => mesesReales.has(m)
+  const mesesConDatos = meses.filter(conDatos)
+  const estArea = Object.fromEntries(areas.map(a => [a, meses.reduce((x, m) => x + (estimado[m]?.[a] || 0), 0)]))
+  const totalEst = Object.values(estArea).reduce((x, v) => x + v, 0)
+  // Cumplimiento solo con los meses que sí tienen estimaciones por mes
+  const proyConDatos = mesesConDatos.reduce((x, m) => x + totalMes(m), 0)
+  const proyAreaConDatos = a => mesesConDatos.reduce((x, m) => x + (proyectado[m]?.[a] || 0), 0)
+  const pct = (a, b) => (b > 0 ? `${Math.round((a / b) * 100)}%` : '—')
+  const estMes = m => areas.reduce((x, a) => x + (estimado[m]?.[a] || 0), 0)
+    const delMes = (s, m, a) => (a ? s.porMes[m]?.[a] || 0 : areas.reduce((x, k) => x + (s.porMes[m]?.[k] || 0), 0))
 
   return (
     <div className="main">
@@ -95,7 +104,14 @@ export default function Proyecciones() {
       </div>
 
       <div className="card mb-md" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', padding: '10px 14px' }}>
-        <div className="flex gap-sm">{RANGOS.map(([k, t]) => <button key={k} className={`btn btn-sm ${rango === k ? 'btn-primary' : 'btn-outline'}`} onClick={() => setRango(k)}>{t}</button>)}</div>
+        <div className="flex gap-sm">
+          <button className={`btn btn-sm ${vista === 'proximas' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setVista('proximas'); setMesSel('') }}>Próximas</button>
+          <button className={`btn btn-sm ${vista === 'pasadas' ? 'btn-primary' : 'btn-outline'}`} onClick={() => { setVista('pasadas'); setMesSel('') }}>Proyecciones pasadas</button>
+        </div>
+        <select value={mesSel} onChange={e => setMesSel(e.target.value)} style={{ fontSize: 13 }} aria-label="Mes">
+          <option value="">{pasadas ? 'Todos los meses pasados' : `Los 12 meses (${textoMesCorto(opciones[0])} – ${textoMesCorto(opciones.at(-1))})`}</option>
+          {opciones.map(m => <option key={m} value={m}>{textoMes(m)}{estaCongelada(m) ? ' 🔒' : ''}</option>)}
+        </select>
         <span style={{ width: 1, height: 22, background: 'var(--border)' }} />
         <select value={estado} onChange={e => setEstado(e.target.value)} style={{ fontSize: 13 }}>
           {['Activo', 'Pausado', 'Terminado', 'Todos'].map(s => <option key={s} value={s}>{s === 'Todos' ? 'Todos los estados' : `Proyectos ${s.toLowerCase()}s`}</option>)}
@@ -109,30 +125,36 @@ export default function Proyecciones() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <div className="stat-box"><div className="stat-label">Total proyectado</div><div className="stat-value green">{fmtMoney(total)}</div><div className="stat-sub">{textoMesCorto(meses[0])} – {textoMesCorto(meses.at(-1))} · {filas.length} proyectos</div></div>
-        <div className="stat-box"><div className="stat-label">{textoMes(hoy)}</div><div className="stat-value">{fmtMoney(mesActual)}</div><div className="stat-sub">estimaciones de este mes</div></div>
+        <div className="stat-box"><div className="stat-label">{pasadas ? 'Proyectado (congelado)' : 'Total proyectado'}</div><div className="stat-value green">{fmtMoney(total)}</div><div className="stat-sub">{meses.length ? (meses.length === 1 ? textoMes(meses[0]) : `${textoMesCorto(meses[0])} – ${textoMesCorto(meses.at(-1))}`) : 'sin meses pasados'} · {filas.length} proyectos</div></div>
+        {pasadas
+          ? <div className="stat-box"><div className="stat-label">Estimado (enviado)</div><div className="stat-value">{fmtMoney(totalEst)}</div><div className="stat-sub">{mesesConDatos.length ? `cumplimiento ${pct(totalEst, proyConDatos)} (${mesesConDatos.length === meses.length ? 'todos los meses' : `en ${mesesConDatos.length} ${mesesConDatos.length === 1 ? 'mes con datos' : 'meses con datos'}`})` : 'sin estimaciones por mes en estos meses'}</div></div>
+          : <div className="stat-box"><div className="stat-label">{textoMes(hoy)}{estaCongelada(hoy) ? ' 🔒' : ''}</div><div className="stat-value">{fmtMoney(mesActual)}</div><div className="stat-sub">{estaCongelada(hoy) ? `congelada desde el ${textoCongelamiento(hoy)}` : `se congela el ${textoCongelamiento(hoy)}`}</div></div>}
         {areas.map(a => (
-          <div key={a} className="stat-box"><div className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: COLOR_AREA[a] }} />{a}</div><div className="stat-value">{fmtMoney(totalArea[a])}</div><div className="stat-sub">{total > 0 ? `${Math.round((totalArea[a] / total) * 100)}% del total` : '—'}</div></div>
+          <div key={a} className="stat-box"><div className="stat-label" style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: COLOR_AREA[a] }} />{a}</div><div className="stat-value">{fmtMoney(totalArea[a])}</div><div className="stat-sub">{pasadas ? `estimado ${fmtMoney(estArea[a])}${mesesConDatos.length ? ` · ${pct(estArea[a], proyAreaConDatos(a))}` : ''}` : total > 0 ? `${Math.round((totalArea[a] / total) * 100)}% del total` : '—'}</div></div>
         ))}
       </div>
 
       <div className="card mb-md">
-        <div className="section-header"><span className="section-title">Proyección por mes</span></div>
+        <div className="section-header"><span className="section-title">{pasadas ? 'Proyectado (congelado) contra estimado' : 'Proyección por mes'}</span><span style={{ fontSize: 12, color: 'var(--text-muted)' }}>🔒 Cada mes se congela el día 15 (o el siguiente día hábil)</span></div>
         <GraficaProyecciones meses={meses} proyectado={proyectado} estimado={estimado} areas={areas} hoy={hoy} />
         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>Montos en MXN y USD sumados tal cual. Lo estimado no cuenta la estimación de arranque de cada proyecto migrado, porque trae todo lo cobrado antes.</div>
       </div>
 
       <div className="card mb-md">
-        <div className="section-header"><span className="section-title">Total por área y mes</span></div>
+        <div className="section-header"><span className="section-title">Total por área y mes</span>{pasadas && meses.some(m => !conDatos(m)) && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>"Sin datos": meses sin estimaciones por mes en la app (la migración cargó lo cobrado acumulado)</span>}</div>
         <div className="table-wrap">
           <table style={{ fontSize: 12 }}>
-            <thead><tr><th>Área</th>{meses.map(m => <th key={m} className="num" style={{ color: m === hoy ? 'var(--green-dark)' : undefined }}>{textoMesCorto(m)}</th>)}<th className="num">Total</th></tr></thead>
+            <thead><tr><th>Área</th>{meses.map(m => <th key={m} className="num" style={{ color: m === hoy ? 'var(--green-dark)' : undefined }} title={estaCongelada(m) ? `Congelada desde el ${textoCongelamiento(m)}` : `Se congela el ${textoCongelamiento(m)}`}>{textoMesCorto(m)}{estaCongelada(m) ? ' 🔒' : ''}</th>)}<th className="num">Total</th></tr></thead>
             <tbody>
               {areas.map(a => (
                 <tr key={a}><td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: COLOR_AREA[a] }} />{a}</span></td>
                   {meses.map(m => <td key={m} className="num">{corto(proyectado[m]?.[a])}</td>)}<td className="num" style={{ fontWeight: 700 }}>{corto(totalArea[a])}</td></tr>
               ))}
-              <tr style={{ fontWeight: 700 }}><td>Total</td>{meses.map(m => <td key={m} className="num">{corto(totalMes(m))}</td>)}<td className="num">{corto(total)}</td></tr>
+              <tr style={{ fontWeight: 700 }}><td>{pasadas ? 'Total proyectado' : 'Total'}</td>{meses.map(m => <td key={m} className="num">{corto(totalMes(m))}</td>)}<td className="num">{corto(total)}</td></tr>
+              {pasadas && <>
+                <tr><td>Estimado (enviado)</td>{meses.map(m => <td key={m} className="num" style={{ color: conDatos(m) ? undefined : 'var(--text-soft)' }}>{conDatos(m) ? corto(estMes(m)) || '$0' : 'sin datos'}</td>)}<td className="num" style={{ fontWeight: 700 }}>{corto(totalEst)}</td></tr>
+                <tr style={{ color: 'var(--text-muted)' }}><td>Cumplimiento</td>{meses.map(m => <td key={m} className="num">{conDatos(m) && totalMes(m) > 0 ? pct(estMes(m), totalMes(m)) : ''}</td>)}<td className="num" style={{ fontWeight: 700 }}>{mesesConDatos.length ? pct(totalEst, proyConDatos) : '—'}</td></tr>
+              </>}
             </tbody>
           </table>
         </div>
@@ -143,13 +165,15 @@ export default function Proyecciones() {
         {filas.length === 0 ? <div className="empty-state"><h3>Sin proyecciones con estos filtros</h3></div> : (
           <div className="table-wrap">
             <table style={{ fontSize: 12 }}>
-              <thead><tr><th style={{ minWidth: 220 }}>Proyecto</th>{porArea && <th>Área</th>}{meses.map(m => <th key={m} className="num" style={{ color: m === hoy ? 'var(--green-dark)' : undefined }}>{textoMesCorto(m)}</th>)}<th className="num">Total</th></tr></thead>
+              <thead><tr><th style={{ minWidth: 220 }}>Proyecto</th>{porArea && <th>Área</th>}{meses.map(m => <th key={m} className="num" style={{ color: m === hoy ? 'var(--green-dark)' : undefined }} title={estaCongelada(m) ? `Congelada desde el ${textoCongelamiento(m)}` : `Se congela el ${textoCongelamiento(m)}`}>{textoMesCorto(m)}{estaCongelada(m) ? ' 🔒' : ''}</th>)}<th className="num">Total</th>{pasadas && <><th className="num">Estimado</th><th className="num">Cumpl.</th></>}</tr></thead>
               <tbody>
-                {filas.flatMap(({ p, s }) => {
+                {filas.flatMap(({ p, s, est }) => {
+                  const estDe = a => meses.reduce((x, m) => x + (a ? est[m]?.[a] || 0 : areas.reduce((y, k) => y + (est[m]?.[k] || 0), 0)), 0)
                   const nombre = <a style={{ cursor: 'pointer', fontWeight: 600 }} onClick={() => navigate(`/projects/${p.id}/proyecciones`)}>{p.name}</a>
                   if (!porArea) return [(
                     <tr key={p.id}><td>{nombre}{p.currency === 'USD' && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-soft)' }}>USD</span>}</td>
-                      {meses.map(m => <td key={m} className="num">{corto(delMes(s, m))}</td>)}<td className="num" style={{ fontWeight: 700 }}>{corto(s.total)}</td></tr>
+                      {meses.map(m => <td key={m} className="num">{corto(delMes(s, m))}</td>)}<td className="num" style={{ fontWeight: 700 }}>{corto(s.total)}</td>
+                      {pasadas && <><td className="num">{corto(estDe())}</td><td className="num" style={{ color: 'var(--text-muted)' }}>{mesesConDatos.length ? pct(estDe(), mesesConDatos.reduce((x, m) => x + delMes(s, m), 0)) : '—'}</td></>}</tr>
                   )]
                   const conArea = areas.filter(a => s.porArea[a] > 0)
                   return conArea.map((a, i) => (
@@ -157,6 +181,7 @@ export default function Proyecciones() {
                       <td>{i === 0 ? nombre : null}</td>
                       <td><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}><span style={{ width: 8, height: 8, borderRadius: 2, background: COLOR_AREA[a] }} />{a}</span></td>
                       {meses.map(m => <td key={m} className="num">{corto(delMes(s, m, a))}</td>)}<td className="num" style={{ fontWeight: 700 }}>{corto(s.porArea[a])}</td>
+                      {pasadas && <><td className="num">{corto(estDe(a))}</td><td className="num" style={{ color: 'var(--text-muted)' }}>{mesesConDatos.length ? pct(estDe(a), mesesConDatos.reduce((x, m) => x + delMes(s, m, a), 0)) : '—'}</td></>}
                     </tr>
                   ))
                 })}

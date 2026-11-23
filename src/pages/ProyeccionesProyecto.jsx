@@ -10,7 +10,7 @@ import { fmtMoney } from '../utils/format'
 import { mesDelPeriodo } from '../utils/cierre'
 import {
   AREAS, COLOR_AREA, mesIso, sumarMeses, textoMes, mesFactura, rangoMeses, prepararProyecto,
-  estimadoPorMes, conceptosPorEstimar, sumarProyecciones,
+  estimadoPorMes, conceptosPorEstimar, sumarProyecciones, estaCongelada, textoCongelamiento,
 } from '../lib/proyecciones'
 
 const Chip = ({ area }) => (
@@ -60,13 +60,16 @@ export default function ProyeccionesProyecto() {
   const meses = rangoMeses(sumarMeses(hoy, -6), sumarMeses(hoy, 12))
   // Primero lo que viene (de este mes en adelante), luego lo pasado del más reciente al más viejo
   const todos = [...new Set(filas.map(f => f.mes))].sort()
-  const porMes = [...todos.filter(m => m >= hoy), ...todos.filter(m => m < hoy).reverse()]
+  const proximos = todos.filter(m => m >= hoy)
+  const pasados = todos.filter(m => m < hoy).reverse()
+  // Meses que todavía se pueden proyectar: los que no están congelados (desde el 15 o el siguiente hábil)
+  const mesesAbiertos = rangoMeses(hoy, sumarMeses(hoy, 18)).filter(m => !estaCongelada(m))
   // Lo ya cobrado por concepto en cada mes (para marcar lo proyectado que ya se estimó)
   const cobrado = new Map()
   for (const e of datos.estimations) if (e.status === 'Enviada') for (const it of e.estimation_items || []) if (it.included) cobrado.set(it.concept_id, mesDelPeriodo(e.period_from, e.period_to))
 
   function nueva() {
-    setForm({ mes: sumarMeses(hoy, 0), concept_id: '', area: 'Consultoría', descripcion: '', monto: '', tbd: false })
+    setForm({ mes: mesesAbiertos[0], concept_id: '', area: 'Consultoría', descripcion: '', monto: '', tbd: false })
   }
   function elegirConcepto(cid) {
     const x = pendientes.find(p => p.concept.id === cid)
@@ -94,6 +97,51 @@ export default function ProyeccionesProyecto() {
   }
 
   const yaProyectados = new Set(filas.filter(f => form && f.mes === form.mes && f.id !== form.id).map(f => f.concept_id).filter(Boolean))
+
+  const tarjetaMes = m => {
+        const delMes = filas.filter(f => f.mes === m)
+        const sm = sumarProyecciones(delMes)
+        const est = estimado[m] ? AREAS.reduce((x, a) => x + (estimado[m][a] || 0), 0) : 0
+        const editable = !soloLectura && !estaCongelada(m)
+        return (
+          <div key={m} className="card mb-md">
+            <div className="section-header" style={{ marginBottom: 8 }}>
+              <span className="section-title">{textoMes(m)}{m === hoy ? ' · este mes' : ''}{estaCongelada(m) && <span title="Ya no se puede cambiar: queda como la proyección comprometida del mes" style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', marginLeft: 8 }}>🔒 Congelada desde el {textoCongelamiento(m)}</span>}</span>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                Proyectado <strong style={{ color: 'var(--navy)' }}>{fmtMoney(sm.total, moneda)}</strong>
+                {est > 0 && <> · estimado {fmtMoney(est, moneda)}</>} · se factura en {textoMes(mesFactura(m))}
+              </span>
+            </div>
+            <div className="table-wrap">
+              <table style={{ fontSize: 12 }}>
+                <thead><tr><th>Concepto</th><th>Área</th><th className="num">Monto</th><th>Estado</th><th>Capturó</th>{editable && <th />}</tr></thead>
+                <tbody>
+                  {delMes.map(f => {
+                    const c = f.concept_id && conceptoDe(f.concept_id)
+                    const mesCobro = f.concept_id && cobrado.get(f.concept_id)
+                    return (
+                      <tr key={f.id}>
+                        <td>{c ? <><strong>{c.concept.key}</strong> {c.concept.description}</> : f.descripcion || '—'}{f.origen === 'excel' && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-soft)' }}>(Excel)</span>}</td>
+                        <td><Chip area={f.area} /></td>
+                        <td className="num">{f.tbd && !(+f.monto > 0) ? <span style={{ color: 'var(--warning)' }}>Por definir</span> : fmtMoney(f.monto, moneda)}</td>
+                        <td style={{ fontSize: 11 }}>{mesCobro ? <span style={{ color: 'var(--green-dark)' }}>✓ Estimado en {textoMes(mesCobro)}</span> : f.concept_id ? <span style={{ color: 'var(--text-muted)' }}>Se sugiere en la estimación</span> : <span style={{ color: 'var(--text-soft)' }}>—</span>}</td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(f.creado_por || '').split('@')[0]}</td>
+                        {editable && <td style={{ whiteSpace: 'nowrap' }}>
+                          <button className="btn btn-sm btn-outline" onClick={() => setForm({ id: f.id, mes: f.mes, concept_id: f.concept_id || '', area: f.area, descripcion: f.descripcion, monto: f.monto, tbd: f.tbd })}>Cambiar</button>{' '}
+                          <button className="btn btn-sm btn-danger" onClick={() => borrar(f)}>✕</button>
+                        </td>}
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr>{[<td key="t" style={{ fontWeight: 700 }}>Total del mes</td>, <td key="a" style={{ fontSize: 11 }}>{AREAS.filter(a => sm.porArea[a]).map(a => `${a}: ${fmtMoney(sm.porArea[a], moneda)}`).join(' · ')}</td>, <td key="m" className="num" style={{ fontWeight: 700 }}>{fmtMoney(sm.total, moneda)}</td>, <td key="x" colSpan={editable ? 3 : 2} />]}</tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )
+  }
 
   return (
     <div className="main">
@@ -134,9 +182,9 @@ export default function ProyeccionesProyecto() {
             <div className="field">
               <label>Mes de la estimación</label>
               <select value={form.mes} onChange={e => setForm(f => ({ ...f, mes: e.target.value }))}>
-                {rangoMeses(sumarMeses(hoy, -12), sumarMeses(hoy, 18)).map(m => <option key={m} value={m}>{textoMes(m)}</option>)}
+                {mesesAbiertos.map(m => <option key={m} value={m}>{textoMes(m)}</option>)}
               </select>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Se factura en {textoMes(mesFactura(form.mes))}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Se factura en {textoMes(mesFactura(form.mes))} · se congela el {textoCongelamiento(form.mes)}</div>
             </div>
             <div className="field" style={{ gridColumn: 'span 2' }}>
               <label>Concepto por cobrar</label>
@@ -181,51 +229,23 @@ export default function ProyeccionesProyecto() {
         </div>
       )}
 
-      {porMes.length === 0 ? (
+      {proximos.length === 0 && pasados.length === 0 ? (
         <div className="empty-state"><h3>Sin proyecciones</h3><p style={{ color: 'var(--text-muted)' }}>Agrega lo que se piensa cobrar en los meses que vienen.</p></div>
-      ) : porMes.map(m => {
-        const delMes = filas.filter(f => f.mes === m)
-        const sm = sumarProyecciones(delMes)
-        const est = estimado[m] ? AREAS.reduce((x, a) => x + (estimado[m][a] || 0), 0) : 0
-        return (
-          <div key={m} className="card mb-md" style={{ opacity: m < hoy ? 0.85 : 1 }}>
-            <div className="section-header" style={{ marginBottom: 8 }}>
-              <span className="section-title">{textoMes(m)}{m === hoy ? ' · este mes' : ''}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                Proyectado <strong style={{ color: 'var(--navy)' }}>{fmtMoney(sm.total, moneda)}</strong>
-                {est > 0 && <> · estimado {fmtMoney(est, moneda)}</>} · se factura en {textoMes(mesFactura(m))}
+      ) : <>
+        {proximos.length === 0 && <div className="empty-state"><h3>Sin proyecciones para los meses que vienen</h3></div>}
+        {proximos.map(tarjetaMes)}
+        {pasados.length > 0 && (
+          <details className="card mb-md">
+            <summary style={{ cursor: 'pointer', fontWeight: 700, color: 'var(--navy)' }}>
+              Proyecciones pasadas · {pasados.length} {pasados.length === 1 ? 'mes archivado' : 'meses archivados'}
+              <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
+                Proyectado {fmtMoney(sumarProyecciones(filas.filter(f => f.mes < hoy)).total, moneda)} · estimado {fmtMoney(pasados.reduce((x, m) => x + AREAS.reduce((y, a) => y + (estimado[m]?.[a] || 0), 0), 0), moneda)}
               </span>
-            </div>
-            <div className="table-wrap">
-              <table style={{ fontSize: 12 }}>
-                <thead><tr><th>Concepto</th><th>Área</th><th className="num">Monto</th><th>Estado</th><th>Capturó</th>{!soloLectura && <th />}</tr></thead>
-                <tbody>
-                  {delMes.map(f => {
-                    const c = f.concept_id && conceptoDe(f.concept_id)
-                    const mesCobro = f.concept_id && cobrado.get(f.concept_id)
-                    return (
-                      <tr key={f.id}>
-                        <td>{c ? <><strong>{c.concept.key}</strong> {c.concept.description}</> : f.descripcion || '—'}{f.origen === 'excel' && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-soft)' }}>(Excel)</span>}</td>
-                        <td><Chip area={f.area} /></td>
-                        <td className="num">{f.tbd && !(+f.monto > 0) ? <span style={{ color: 'var(--warning)' }}>Por definir</span> : fmtMoney(f.monto, moneda)}</td>
-                        <td style={{ fontSize: 11 }}>{mesCobro ? <span style={{ color: 'var(--green-dark)' }}>✓ Estimado en {textoMes(mesCobro)}</span> : f.concept_id ? <span style={{ color: 'var(--text-muted)' }}>Se sugiere en la estimación</span> : <span style={{ color: 'var(--text-soft)' }}>—</span>}</td>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(f.creado_por || '').split('@')[0]}</td>
-                        {!soloLectura && <td style={{ whiteSpace: 'nowrap' }}>
-                          <button className="btn btn-sm btn-outline" onClick={() => setForm({ id: f.id, mes: f.mes, concept_id: f.concept_id || '', area: f.area, descripcion: f.descripcion, monto: f.monto, tbd: f.tbd })}>Cambiar</button>{' '}
-                          <button className="btn btn-sm btn-danger" onClick={() => borrar(f)}>✕</button>
-                        </td>}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr>{[<td key="t" style={{ fontWeight: 700 }}>Total del mes</td>, <td key="a" style={{ fontSize: 11 }}>{AREAS.filter(a => sm.porArea[a]).map(a => `${a}: ${fmtMoney(sm.porArea[a], moneda)}`).join(' · ')}</td>, <td key="m" className="num" style={{ fontWeight: 700 }}>{fmtMoney(sm.total, moneda)}</td>, <td key="x" colSpan={soloLectura ? 2 : 3} />]}</tr>
-                </tfoot>
-              </table>
-            </div>
-          </div>
-        )
-      })}
+            </summary>
+            <div style={{ marginTop: 12 }}>{pasados.map(tarjetaMes)}</div>
+          </details>
+        )}
+      </>}
     </div>
   )
 }
