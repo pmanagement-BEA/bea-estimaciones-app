@@ -12,6 +12,7 @@ import EstimacionBreve from '../components/EstimacionBreve'
 import { descargarBreve } from '../lib/estimacionBreveExcel'
 import { nombreBreve } from '../lib/estimacionBreve'
 import { cargarExcelJS } from '../lib/cargarModulo'
+import { conceptosPorEstimar } from '../lib/proyecciones'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
 import { nextNumber } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
@@ -84,6 +85,10 @@ export default function Estimation() {
   const areaStatusRef   = useRef({})
   const conceptosClienteRef = useRef([])
   const saveTimer       = useRef(null)
+  // Guardado de conceptos: un temporizador por concepto (antes era uno solo y se perdían cambios)
+  const saveTimers      = useRef({})
+  const pendientes      = useRef({}) // { concept_id: item } aún sin guardar
+  const [proyectados, setProyectados] = useState({ ids: new Set(), faltan: [], auto: 0, total: 0 })
   const reportSaveTimer = useRef(null)
   const reportInsert    = useRef(null)
   const reportRef       = useRef(null)
@@ -162,6 +167,36 @@ export default function Estimation() {
       }
     }
 
+    // Proyecciones del mes: se precargan en un borrador nuevo (o se ofrecen si ya tenía conceptos)
+    let infoProyectados = { ids: new Set(), faltan: [], auto: 0, total: 0 }
+    if (est.status === 'Borrador') {
+      const mesEst = mesDelPeriodo(est.period_from, est.period_to)
+      const { data: prs } = await supabase.from('proyecciones').select('concept_id, monto').eq('project_id', id).eq('mes', mesEst).not('concept_id', 'is', null)
+      if (prs?.length) {
+        const rates = projectRates(projRes.data)
+        const libres = new Set(conceptosPorEstimar(projRes.data, discs, allEsts.filter(e => e.id !== est.id)).filter(x => x.porEstimar >= x.monto - 0.5).map(x => x.concept.id))
+        const ids = new Set(prs.map(x => x.concept_id))
+        const faltan = [...ids].filter(cid => libres.has(cid) && !itemMap[cid]?.included)
+        infoProyectados = { ids, faltan, auto: 0, total: 0 }
+        if ((est.estimation_items || []).length === 0 && faltan.length) {
+          for (const cid of faltan) {
+            const [c, d] = discs.flatMap(dd => dd.concepts.map(cc => [cc, dd])).find(([cc]) => cc.id === cid)
+            const nuevo = { ...itemMap[cid], included: true }
+            nuevo.amount = itemAmount(nuevo, c, d, rates, discs)
+            const { data: creado } = await supabase.from('estimation_items').insert({
+              estimation_id: est.id, concept_id: cid, included: true, amount: nuevo.amount || 0,
+              parcial_enabled: false, pct_parcial: 0, delayed: false, cause: '',
+            }).select().single()
+            itemMap[cid] = creado ? { ...nuevo, id: creado.id } : nuevo
+            infoProyectados.total += nuevo.amount || 0
+          }
+          infoProyectados.auto = faltan.length
+          infoProyectados.faltan = []
+        }
+      }
+    }
+    setProyectados(infoProyectados)
+
     const rdRes = await supabase.from('report_data').select('*').eq('estimation_id', est.id).maybeSingle()
     let rd = rdRes.data || null
     let heredado = null
@@ -227,9 +262,32 @@ export default function Estimation() {
       toast(`${area} vuelve a pendiente porque cambiaste su avance`)
     }
 
-    clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => upsertItem(estimation.id, conceptId, itemWithAmount), 500)
+    pendientes.current[conceptId] = itemWithAmount
+    clearTimeout(saveTimers.current[conceptId])
+    saveTimers.current[conceptId] = setTimeout(() => {
+      delete pendientes.current[conceptId]; delete saveTimers.current[conceptId]
+      upsertItem(estimation.id, conceptId, itemWithAmount)
+    }, 500)
   }, [estimation?.id, project, disciplines])
+
+  // Guarda ya lo que esté esperando su turno (antes de enviar, marcar área o salir)
+  async function guardarPendientes() {
+    const lista = Object.entries(pendientes.current)
+    pendientes.current = {}
+    for (const [cid] of lista) { clearTimeout(saveTimers.current[cid]); delete saveTimers.current[cid] }
+    for (const [cid, item] of lista) await upsertItem(estimation.id, cid, item)
+  }
+  useEffect(() => () => { if (estimation?.id) guardarPendientes() }, [estimation?.id])
+
+  // Marca los conceptos proyectados para este mes que faltan (botón, cuando el borrador ya tenía conceptos)
+  function marcarProyectados() {
+    for (const cid of proyectados.faltan) {
+      const found = disciplines.flatMap(d => d.concepts.map(c => [c, d])).find(([c]) => c.id === cid)
+      if (found) scheduleItemSave(cid, { ...items[cid], included: true }, found[1], found[0])
+    }
+    toast(`${proyectados.faltan.length} conceptos proyectados marcados ✓`)
+    setProyectados(p => ({ ...p, faltan: [] }))
+  }
 
   async function upsertItem(estId, conceptId, item) {
     setSaving(true)
@@ -258,6 +316,7 @@ export default function Estimation() {
   async function markSent() {
     setSaving(true)
     // Guardar items pendientes primero
+    await guardarPendientes()
     for (const [cid, item] of Object.entries(items)) {
       if (item.included) await upsertItem(estimation.id, cid, item)
     }
@@ -480,7 +539,7 @@ export default function Estimation() {
       const { [a]: _, ...resto } = areaStatus
       areaStatusRef.current = resto; setAreaStatus(resto)
     } else {
-      clearTimeout(saveTimer.current)
+      await guardarPendientes()
       const { fila, error } = await marcarAreaLista(estimation.id, a, profile)
       if (error) { toast('No se pudo: ' + error.message, true); return }
       const nuevo = { ...areaStatus, [a]: fila }
@@ -521,7 +580,7 @@ export default function Estimation() {
         </div>
         <div className="flex" style={{ flexWrap: 'wrap', gap: 8 }}>
           {!readonly && <>
-            <button className="btn btn-outline" onClick={() => { toast('Borrador guardado ✓') }}>Guardar borrador</button>
+            <button className="btn btn-outline" onClick={async () => { await guardarPendientes(); toast('Borrador guardado ✓') }}>Guardar borrador</button>
             {perms.todo && <button className="btn btn-primary" onClick={() => setModal({
               title: '✉ Marcar Estimación como Enviada',
               body: (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
@@ -621,6 +680,21 @@ export default function Estimation() {
               </div>
             </div>
           </div>
+
+          {/* Lo proyectado para este mes */}
+          {estimation.status === 'Borrador' && (proyectados.auto > 0 || proyectados.faltan.length > 0) && (
+            <div className="card mb-md no-print" style={{ borderLeft: '4px solid var(--green)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '10px 16px' }}>
+              <span style={{ fontSize: 13 }}>
+                {proyectados.auto > 0
+                  ? <>Se precargaron <strong>{proyectados.auto} conceptos proyectados</strong> para este mes ({fmtMoney(proyectados.total, project.currency)}). Revísalos: puedes quitar los que no se vayan a cobrar.</>
+                  : <>Hay <strong>{proyectados.faltan.length} conceptos proyectados</strong> para este mes que no están marcados.</>}
+              </span>
+              <span className="flex gap-sm">
+                {proyectados.faltan.length > 0 && !readonly && <button className="btn btn-sm btn-primary" onClick={marcarProyectados}>Marcar los proyectados</button>}
+                <button className="btn btn-sm btn-outline" onClick={() => navigate(`/projects/${id}/proyecciones`)}>Ver proyecciones</button>
+              </span>
+            </div>
+          )}
 
           {/* Resumen Financiero */}
           <div className="section">
@@ -784,6 +858,7 @@ export default function Estimation() {
                               <td>
                                 <strong>{c.key}</strong>
                                 {isFiniquito && <span className="tag-finiquito">FIN</span>}
+                                {proyectados.ids.has(c.id) && <span title="Proyectado para este mes" style={{ display: 'inline-block', fontSize: 10, background: 'var(--green-soft)', color: 'var(--green-dark)', padding: '1px 6px', borderRadius: 3, marginLeft: 4, fontWeight: 600 }}>Proyectado</span>}
                                 {tieneParcialPendiente && (
                                   <span style={{ display: 'inline-block', fontSize: 10, background: 'var(--warning-soft)', color: 'var(--warning)', padding: '1px 6px', borderRadius: 3, marginLeft: 4, fontWeight: 600 }}>
                                     {pctYaCobrado}% cobrado

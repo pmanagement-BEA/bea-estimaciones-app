@@ -15,6 +15,8 @@ import Aditivas from './pages/Aditivas'
 import AditivaForm from './pages/AditivaForm'
 import Dashboard from './pages/Dashboard'
 import Directorio from './pages/Directorio'
+import Proyecciones from './pages/Proyecciones'
+import ProyeccionesProyecto from './pages/ProyeccionesProyecto'
 
 function PrivateRoute({ children }) {
   const { session, loading } = useAuth()
@@ -48,6 +50,8 @@ export default function App() {
         <Route path="/projects/:id/history" element={<PrivateRoute><History /></PrivateRoute>} />
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/directorio" element={<PrivateRoute><Directorio /></PrivateRoute>} />
+        <Route path="/proyecciones" element={<PrivateRoute><Proyecciones /></PrivateRoute>} />
+        <Route path="/projects/:id/proyecciones" element={<PrivateRoute><ProyeccionesProyecto /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas" element={<PrivateRoute><Aditivas /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas/new" element={<PrivateRoute><AditivaForm /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas/:adId/edit" element={<PrivateRoute><AditivaForm /></PrivateRoute>} />
