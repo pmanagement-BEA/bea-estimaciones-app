@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from './Toast'
 import { fmtMoney } from '../utils/format'
 import {
-  AREAS, mesIso, sumarMeses, textoMes, mesFactura, rangoMeses, prepararProyecto, conceptosPorEstimar, estaCongelada, textoCongelamiento,
+  AREAS, COLOR_AREA, mesIso, sumarMeses, textoMes, mesFactura, rangoMeses, prepararProyecto, conceptosPorEstimar, estaCongelada, textoCongelamiento, detalleEstimacion,
 } from '../lib/proyecciones'
 
 /** Meses que todavía se pueden proyectar: de este mes a 18 meses, sin los congelados (desde el 15 o el siguiente hábil). */
@@ -69,6 +69,9 @@ export default function FormProyeccion({ proyectos, inicial = {}, proyecciones =
             </select>
           )}
         </div>
+        {project && datos && (
+          <PreviaEstimacion project={project} datos={datos} pendientes={pendientes} yaProyectados={yaProyectados} actual={form.concept_id} moneda={moneda} alElegir={elegirConcepto} />
+        )}
         <div className="field">
           <label>Mes de la estimación</label>
           <select value={form.mes} onChange={e => setForm(f => ({ ...f, mes: e.target.value }))}>
@@ -117,5 +120,56 @@ export default function FormProyeccion({ proyectos, inicial = {}, proyecciones =
         <button className="btn btn-primary btn-sm" onClick={guardar} disabled={guardando}>{guardando ? 'Guardando…' : 'Guardar'}</button>
       </div>
     </div>
+  )
+}
+
+/**
+ * Vista previa de la última estimación del proyecto (o de otra, con el selector): qué se cobró, concepto por concepto,
+ * cuánto le falta a cada uno y un botón para proyectarlo directo.
+ */
+function PreviaEstimacion({ project, datos, pendientes, yaProyectados, actual, moneda, alElegir }) {
+  const ests = useMemo(() => [...datos.estimations].sort((a, b) => (b.number || 0) - (a.number || 0)), [datos])
+  const [sel, setSel] = useState(null)
+  const est = ests.find(e => e.id === sel) || ests[0]
+  const det = useMemo(() => (est ? detalleEstimacion(project, datos.disciplines, est) : null), [est, project, datos])
+  const falta = new Map(pendientes.map(p => [p.concept.id, p.porEstimar]))
+  if (!est) return <div className="previa-est vacia" style={{ gridColumn: '1 / -1' }}>Este proyecto todavía no tiene estimaciones: elige abajo lo que falta por cobrar.</div>
+  return (
+    <details className="previa-est" style={{ gridColumn: '1 / -1' }}>
+      <summary>
+        <span>👁 Ver la última estimación</span>
+        <span className="res">#{est.number} · {det.mes ? textoMes(det.mes) : 'sin periodo'} · {fmtMoney(det.total, moneda)}{est.status !== 'Enviada' ? ` · ${est.status}` : ''}</span>
+      </summary>
+      <div className="cuerpo">
+        <div className="barra">
+          {ests.length > 1 && (
+            <select value={est.id} onChange={e => setSel(e.target.value)}>
+              {ests.map(e => { const m = detalleEstimacion(project, datos.disciplines, e).mes; return <option key={e.id} value={e.id}>Estimación #{e.number} · {m ? textoMes(m) : 'sin periodo'}{e.status !== 'Enviada' ? ` (${e.status})` : ''}</option> })}
+            </select>
+          )}
+          <a href={`${import.meta.env.BASE_URL}projects/${project.id}/estimations/${est.id}`} target="_blank" rel="noreferrer">Abrir completa ↗</a>
+        </div>
+        {det.items.length === 0 ? <div className="nota">Esta estimación no trae conceptos con monto.</div> : (
+          <ul>
+            {det.items.map(x => {
+              const f = falta.get(x.concept.id) || 0
+              const puede = f > 0.5 && !yaProyectados.has(x.concept.id)
+              return (
+                <li key={x.concept.id} className={actual === x.concept.id ? 'elegido' : ''}>
+                  <span className="punto" style={{ background: COLOR_AREA[x.area] }} title={x.area} />
+                  <span className="txt" title={x.concept.description}><strong>{x.concept.key}</strong> {x.concept.description}</span>
+                  <span className="monto">{fmtMoney(x.monto, moneda)}</span>
+                  <span className="falta">{f > 0.5 ? `faltan ${fmtMoney(f, moneda)}` : 'completo'}</span>
+                  {puede
+                    ? <button type="button" className="btn btn-outline btn-sm" onClick={() => alElegir(x.concept.id)}>{actual === x.concept.id ? '✓ Elegido' : 'Proyectar'}</button>
+                    : <span className="ya">{f > 0.5 ? 'ya proyectado' : ''}</span>}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <div className="nota">"Proyectar" llena el concepto y el monto que le falta; puedes cambiar el monto antes de guardar.</div>
+      </div>
+    </details>
   )
 }

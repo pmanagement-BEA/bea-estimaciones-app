@@ -190,3 +190,23 @@ export function equipos(projects, miembros, nombrePorEmail = {}) {
   }
   return out
 }
+
+/**
+ * Lo que trae una estimación, concepto por concepto (para la vista previa al proyectar).
+ * Devuelve { mes, total, items: [{ concept, discipline, area, monto }] } con los conceptos incluidos y con monto.
+ */
+export function detalleEstimacion(project, disciplines, estimation) {
+  const rates = projectRates(project)
+  const porConcepto = new Map()
+  for (const d of disciplines) for (const c of d.concepts || []) porConcepto.set(c.id, [c, d])
+  const items = []
+  for (const it of estimation.estimation_items || []) {
+    if (!it.included) continue
+    const cd = porConcepto.get(it.concept_id); if (!cd) continue
+    const monto = itemAmount(it, cd[0], cd[1], rates, disciplines)
+    if (monto > 0.5) items.push({ concept: cd[0], discipline: cd[1], area: disciplineArea(cd[1]) || 'Consultoría', monto })
+  }
+  const orden = new Map(disciplines.flatMap((d, i) => (d.concepts || []).map((c, j) => [c.id, i * 1000 + j])))
+  items.sort((a, b) => orden.get(a.concept.id) - orden.get(b.concept.id))
+  return { mes: mesDelPeriodo(estimation.period_from, estimation.period_to), total: items.reduce((s, x) => s + x.monto, 0), items }
+}
