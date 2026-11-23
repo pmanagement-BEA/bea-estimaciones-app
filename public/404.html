@@ -9,7 +9,8 @@
     var base = '/bea-estimaciones-app';
     var route = path.replace(base, '') || '/';
     sessionStorage.setItem('spa-redirect', route + window.location.search + window.location.hash);
-    window.location.replace(base + '/');
+    // ?v= evita que el navegador abra la copia vieja de la app que guarda en caché (hasta 10 min)
+    window.location.replace(base + '/?v=' + Date.now());
   </script>
 </head>
 <body></body>
