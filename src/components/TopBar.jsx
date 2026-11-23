@@ -6,6 +6,8 @@ const I = {
   dashboard: <><path d="M4 20V10" /><path d="M10 20V4" /><path d="M16 20v-7" /><path d="M22 20H2" /></>,
   proyecciones: <><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></>,
   directorio: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7" /><path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" /></>,
+  checador: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></>,
+  track: <><path d="M3 12h4l3-8 4 16 3-8h4" /></>,
   salir: <><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l4-4-4-4" /><path d="M14 12H4" /></>,
 }
 const Icono = ({ n }) => (
@@ -16,6 +18,8 @@ const NAV = [
   ['/', 'proyectos', 'Proyectos', p => p === '/' || p.startsWith('/projects')],
   ['/dashboard', 'dashboard', 'Dashboard', p => p.startsWith('/dashboard')],
   ['/proyecciones', 'proyecciones', 'Proyecciones', p => p.startsWith('/proyecciones')],
+  ['/checador', 'checador', 'Checador', p => p.startsWith('/checador'), true],
+  ['/track', 'track', 'Track', p => p.startsWith('/track'), true],
   ['/directorio', 'directorio', 'Directorio', p => p.startsWith('/directorio')],
 ]
 
@@ -31,9 +35,9 @@ export default function TopBar({ profile, onSignOut }) {
         <span className="brand-sub">Estimaciones de Proyectos</span>
       </div>
       <nav className="topbar-nav" aria-label="Secciones">
-        {NAV.map(([to, icono, texto, activo]) => (
+        {NAV.map(([to, icono, texto, activo, enObra]) => (
           <button key={to} className={`nav-btn${activo(ruta) ? ' activo' : ''}`} onClick={() => navigate(to)} aria-current={activo(ruta) ? 'page' : undefined}>
-            <Icono n={icono} /><span>{texto}</span>
+            <Icono n={icono} /><span>{texto}</span>{enObra && <span className="nav-obra" title="En construcción" aria-label="En construcción">🚧</span>}
           </button>
         ))}
       </nav>
