@@ -338,3 +338,18 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
 .tabla-proyectados td.accion{width:64px;text-align:right}
 .btn-link-mini{background:none;border:0;padding:0;color:var(--green-dark);font:inherit;font-size:11px;font-weight:600;cursor:pointer;text-decoration:underline}
 @media (max-width: 760px){ .tabla-proyectados td.area,.tabla-proyectados td.estado{display:none} }
+
+/* Proyecciones: pestañas Próximas / Pasadas y conceptos por proyecto */
+.pestanas-proy{display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:14px;flex-wrap:wrap}
+.pestanas-proy button{background:none;border:0;border-bottom:3px solid transparent;margin-bottom:-2px;padding:8px 16px 7px;font:inherit;font-size:14px;font-weight:600;color:var(--text-muted);cursor:pointer;display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+.pestanas-proy button span{font-size:11px;font-weight:400;color:var(--text-soft)}
+.pestanas-proy button:hover{color:var(--navy)}
+.pestanas-proy button.activa{color:var(--navy);border-bottom-color:var(--green)}
+.tabla-proy .btn-flecha{background:none;border:0;padding:0 2px;cursor:pointer;color:var(--text-muted);font-size:11px;width:14px}
+.tabla-proy .btn-flecha:hover{color:var(--navy)}
+.tabla-proy tr.fila-proyecto.abierta td{background:#F5F7FA}
+.tabla-proy tr.fila-concepto td{padding-top:3px;padding-bottom:3px;border-top:0;font-size:11.5px}
+.tabla-proy tr.fila-concepto td:first-child{padding-left:30px}
+.tabla-proy .concepto-linea{display:flex;align-items:center;gap:6px;max-width:420px}
+.tabla-proy .concepto-texto{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.por-definir{color:var(--warning);font-size:10.5px;white-space:nowrap}

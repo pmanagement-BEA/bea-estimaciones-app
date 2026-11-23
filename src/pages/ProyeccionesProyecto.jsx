@@ -10,7 +10,7 @@ import { fmtMoney } from '../utils/format'
 import { mesDelPeriodo } from '../utils/cierre'
 import {
   AREAS, COLOR_AREA, mesIso, sumarMeses, textoMes, mesFactura, rangoMeses, prepararProyecto,
-  estimadoPorMes, conceptosPorEstimar, sumarProyecciones, estaCongelada, textoCongelamiento,
+  estimadoPorMes, conceptosPorEstimar, sumarProyecciones, estaCongelada, textoCongelamiento, quienProyecta, responsables,
 } from '../lib/proyecciones'
 
 const Chip = ({ area }) => (
@@ -28,15 +28,20 @@ export default function ProyeccionesProyecto() {
   const [filas, setFilas] = useState([])
   const [form, setForm] = useState(null)
   const [guardando, setGuardando] = useState(false)
+  const [gente, setGente] = useState({ nombrePorEmail: {}, lider: '' })
   const ajeno = useAjeno(project, profile)
   const soloLectura = isReadOnlyRole(profile) || ajeno
   const hoy = mesIso(new Date())
 
   async function cargar() {
-    const [p, pr] = await Promise.all([
+    const [p, pr, mi, di] = await Promise.all([
       supabase.from('projects').select('*, disciplines (*, concepts(*)), estimations (*, estimation_items(*))').eq('id', id).single(),
       supabase.from('proyecciones').select('*').eq('project_id', id).order('mes'),
+      supabase.from('project_members').select('project_id, rol, email').eq('project_id', id),
+      supabase.from('directorio').select('nombre, email'),
     ])
+    const nombrePorEmail = Object.fromEntries((di.data || []).filter(d => d.email).map(d => [d.email.toLowerCase(), d.nombre]))
+    if (!p.error) setGente({ nombrePorEmail, lider: responsables([p.data], mi.data || [], nombrePorEmail)[p.data.id] })
     if (p.error) { toast('No se pudo cargar el proyecto', true); return }
     setProject(p.data)
     setFilas(pr.error ? [] : pr.data || [])
@@ -99,7 +104,8 @@ export default function ProyeccionesProyecto() {
   const yaProyectados = new Set(filas.filter(f => form && f.mes === form.mes && f.id !== form.id).map(f => f.concept_id).filter(Boolean))
 
   const tarjetaMes = m => {
-        const delMes = filas.filter(f => f.mes === m)
+        // Primero lo que trae monto, al final lo que está por definir
+        const delMes = filas.filter(f => f.mes === m).sort((x, y) => (x.tbd && !(+x.monto > 0)) - (y.tbd && !(+y.monto > 0)) || AREAS.indexOf(x.area) - AREAS.indexOf(y.area) || String(x.descripcion).localeCompare(String(y.descripcion), 'es', { numeric: true }))
         const sm = sumarProyecciones(delMes)
         const est = estimado[m] ? AREAS.reduce((x, a) => x + (estimado[m][a] || 0), 0) : 0
         const editable = !soloLectura && !estaCongelada(m)
@@ -114,18 +120,18 @@ export default function ProyeccionesProyecto() {
             </div>
             <div className="table-wrap">
               <table style={{ fontSize: 12 }}>
-                <thead><tr><th>Concepto</th><th>Área</th><th className="num">Monto</th><th>Estado</th><th>Capturó</th>{editable && <th />}</tr></thead>
+                <thead><tr><th>Concepto</th><th>Área</th><th className="num">Monto</th><th>Estado</th><th>Proyecta</th>{editable && <th />}</tr></thead>
                 <tbody>
                   {delMes.map(f => {
                     const c = f.concept_id && conceptoDe(f.concept_id)
                     const mesCobro = f.concept_id && cobrado.get(f.concept_id)
                     return (
                       <tr key={f.id}>
-                        <td>{c ? <><strong>{c.concept.key}</strong> {c.concept.description}</> : f.descripcion || '—'}{f.origen === 'excel' && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-soft)' }}>(Excel)</span>}</td>
+                        <td>{c ? <><strong>{c.concept.key}</strong> {c.concept.description}</> : f.descripcion || '—'}</td>
                         <td><Chip area={f.area} /></td>
                         <td className="num">{f.tbd && !(+f.monto > 0) ? <span style={{ color: 'var(--warning)' }}>Por definir</span> : fmtMoney(f.monto, moneda)}</td>
                         <td style={{ fontSize: 11 }}>{mesCobro ? <span style={{ color: 'var(--green-dark)' }}>✓ Estimado en {textoMes(mesCobro)}</span> : f.concept_id ? <span style={{ color: 'var(--text-muted)' }}>Se sugiere en la estimación</span> : <span style={{ color: 'var(--text-soft)' }}>—</span>}</td>
-                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(f.creado_por || '').split('@')[0]}</td>
+                        <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{quienProyecta(f.creado_por, gente.nombrePorEmail)}</td>
                         {editable && <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="btn btn-sm btn-outline" onClick={() => setForm({ id: f.id, mes: f.mes, concept_id: f.concept_id || '', area: f.area, descripcion: f.descripcion, monto: f.monto, tbd: f.tbd })}>Cambiar</button>{' '}
                           <button className="btn btn-sm btn-danger" onClick={() => borrar(f)}>✕</button>
@@ -153,7 +159,7 @@ export default function ProyeccionesProyecto() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h1 className="page-title">Proyecciones <span style={{ color: 'var(--green-dark)' }}>de cobro</span></h1>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{project.name}{project.client ? ` · ${project.client}` : ''}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>{project.name}{project.client ? ` · ${project.client}` : ''} · Responsable: <strong style={{ color: 'var(--navy)' }}>{gente.lider || 'sin líder asignado'}</strong></div>
         </div>
         <div className="flex gap-sm" style={{ flexWrap: 'wrap' }}>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/estimations/current`)}>Estimación del mes</button>

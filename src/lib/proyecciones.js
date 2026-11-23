@@ -113,3 +113,29 @@ export function precargaDelMes(proyecciones, mes, items, porEstimarIds) {
     .filter(p => p.mes === mes && p.concept_id && !items[p.concept_id]?.included && porEstimarIds.has(p.concept_id))
     .map(p => ({ concept_id: p.concept_id, proyeccion: p }))
 }
+
+/** Nombre corto de una persona del directorio: "Ana María Valencia Maldonado" → "Ana María Valencia" */
+export const nombreCorto = n => {
+  const w = String(n || '').trim().split(/\s+/).slice(0, 3)
+  while (w.length > 1 && /^(de|del|la|las|los|y)$/i.test(w.at(-1))) w.pop() // "Alberto Dávila de" → "Alberto Dávila"
+  return w.join(' ')
+}
+/**
+ * Quién proyectó una fila: el correo de quien la capturó en la app (se busca en el directorio)
+ * o la hoja del Excel de Proyecciones 2026 ("Hoja ANA (Excel)" → "ANA (Excel)").
+ */
+export function quienProyecta(creadoPor, nombrePorEmail = {}) {
+  const c = String(creadoPor || '').trim()
+  if (!c) return ''
+  if (c.includes('@')) return nombreCorto(nombrePorEmail[c.toLowerCase()]) || c.split('@')[0]
+  return c.replace(/Hoja /g, '')
+}
+/** Responsables (líderes) de cada proyecto: { project_id: 'Nombre, Nombre' } */
+export function responsables(projects, miembros, nombrePorEmail = {}) {
+  const out = {}
+  for (const p of projects) {
+    const lideres = miembros.filter(m => m.project_id === p.id && m.rol === 'lider').map(m => nombreCorto(nombrePorEmail[String(m.email || '').toLowerCase()]) || String(m.email || '').split('@')[0])
+    out[p.id] = [...new Set(lideres)].join(', ') || (typeof p.team?.lider === 'string' ? p.team.lider : '')
+  }
+  return out
+}
