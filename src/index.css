@@ -40,7 +40,10 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .brand{display:flex;align-items:center;gap:12px}
 .brand-mark{font-weight:800;font-size:22px;letter-spacing:.5px;position:relative;padding-right:14px}
 .brand-mark::after{content:"";position:absolute;right:0;top:4px;width:10px;height:10px;background:var(--green);transform:skewX(-15deg);border-radius:2px}
-.brand-sub{font-size:11px;color:rgba(255,255,255,.65);letter-spacing:1.5px;text-transform:uppercase;padding-left:14px;border-left:1px solid rgba(255,255,255,.25)}
+.brand-sub{font-size:15px;font-weight:700;color:#fff;letter-spacing:.3px;padding-left:14px;border-left:1px solid rgba(255,255,255,.25)}
+.brand-logo{height:34px;width:auto;display:block}
+.brand-simbolo{height:30px;width:auto;display:none}
+@media (max-width:1300px){.brand-logo{display:none}.brand-simbolo{display:block}}
 .topbar-actions{display:flex;gap:10px;align-items:center}
 .topbar{gap:16px;flex-wrap:wrap}
 .topbar-nav{display:flex;gap:4px;align-items:center;background:rgba(0,0,0,.14);padding:4px;border-radius:12px}
@@ -54,7 +57,8 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 .usuario-datos{display:flex;flex-direction:column;line-height:1.15}
 .usuario-nombre{font-size:12px;font-weight:600;color:#fff;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .usuario-rol{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.65)}
-@media (max-width: 1100px){ .usuario-datos{display:none} .brand-sub{display:none} }
+@media (max-width: 1100px){ .usuario-datos{display:none} }
+@media (max-width: 560px){ .brand-sub{display:none} }
 @media (max-width: 760px){ .topbar{padding:8px 12px} .nav-btn span{display:none} .nav-btn{padding:8px 10px} }
 .status-pill{font-size:11px;text-transform:uppercase;letter-spacing:1px;padding:4px 10px;border-radius:99px;background:rgba(22,163,74,.18);color:#86efac;border:1px solid rgba(22,163,74,.3)}
 .status-pill.dirty{background:rgba(183,121,31,.2);color:#fcd34d;border-color:rgba(183,121,31,.35)}
