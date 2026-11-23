@@ -152,7 +152,7 @@ export default function ProyeccionesProyecto() {
                   )
                 })}
               </select>
-              {form.concept_id && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Se precarga en la estimación de {textoMes(form.mes)}.</div>}
+              {form.concept_id && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Se sugiere en la estimación de {textoMes(form.mes)} (un clic para marcarlo).</div>}
             </div>
             <div className="field">
               <label>Área</label>
@@ -208,7 +208,7 @@ export default function ProyeccionesProyecto() {
                         <td>{c ? <><strong>{c.concept.key}</strong> {c.concept.description}</> : f.descripcion || '—'}{f.origen === 'excel' && <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--text-soft)' }}>(Excel)</span>}</td>
                         <td><Chip area={f.area} /></td>
                         <td className="num">{f.tbd && !(+f.monto > 0) ? <span style={{ color: 'var(--warning)' }}>Por definir</span> : fmtMoney(f.monto, moneda)}</td>
-                        <td style={{ fontSize: 11 }}>{mesCobro ? <span style={{ color: 'var(--green-dark)' }}>✓ Estimado en {textoMes(mesCobro)}</span> : f.concept_id ? <span style={{ color: 'var(--text-muted)' }}>Se precarga en la estimación</span> : <span style={{ color: 'var(--text-soft)' }}>—</span>}</td>
+                        <td style={{ fontSize: 11 }}>{mesCobro ? <span style={{ color: 'var(--green-dark)' }}>✓ Estimado en {textoMes(mesCobro)}</span> : f.concept_id ? <span style={{ color: 'var(--text-muted)' }}>Se sugiere en la estimación</span> : <span style={{ color: 'var(--text-soft)' }}>—</span>}</td>
                         <td style={{ fontSize: 11, color: 'var(--text-muted)' }}>{(f.creado_por || '').split('@')[0]}</td>
                         {!soloLectura && <td style={{ whiteSpace: 'nowrap' }}>
                           <button className="btn btn-sm btn-outline" onClick={() => setForm({ id: f.id, mes: f.mes, concept_id: f.concept_id || '', area: f.area, descripcion: f.descripcion, monto: f.monto, tbd: f.tbd })}>Cambiar</button>{' '}
