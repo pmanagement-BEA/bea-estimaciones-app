@@ -587,7 +587,7 @@ export default function ProjectSetup() {
           </Field>
           <Field label="Estado">
             <select value={project.status} onChange={e => setProjectField('status', e.target.value)}>
-              {['Activo','Pausado','Terminado','Cancelado'].map(o => <option key={o}>{o}</option>)}
+              {['Activo','Pausado','Inactivo','Terminado','Cancelado'].map(o => <option key={o}>{o}</option>)}
             </select>
           </Field>
           <Field label="Fecha de inicio de Proyecto">

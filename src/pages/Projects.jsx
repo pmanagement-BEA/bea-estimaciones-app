@@ -15,6 +15,7 @@ export default function Projects() {
   const [loading, setLoading] = useState(true)
   const [mine, setMine] = useState({}) // { project_id: [rol] }
   const [onlyMine, setOnlyMine] = useState(true)
+  const [verInactivos, setVerInactivos] = useState(false)
   // Solo lectura (p. ej. Facturación) no está asignado a proyectos: de inicio ve todos
   useEffect(() => { if (profile?.role === 'lectura') setOnlyMine(false) }, [profile?.role])
   const canCreate = !profile || ['lider', 'coordinador'].includes(profile.role)
@@ -72,6 +73,12 @@ export default function Projects() {
               Solo donde estoy asignado
             </label>
           )}
+          {projects.some(p => p.status === 'Inactivo') && (
+            <label style={{ fontSize: 12, display: 'flex', gap: 6, alignItems: 'center' }}>
+              <input type="checkbox" checked={verInactivos} onChange={e => setVerInactivos(e.target.checked)} />
+              Ver inactivos ({projects.filter(p => p.status === 'Inactivo').length})
+            </label>
+          )}
           {canCreate && <button className="btn btn-primary" onClick={createProject}>+ Nuevo Proyecto</button>}
         </div>
       </div>
@@ -86,10 +93,11 @@ export default function Projects() {
         <div className="project-grid">
           {projects
             .filter(p => !onlyMine || mine[p.id] || p.user_id === profile?.id)
+            .filter(p => verInactivos || p.status !== 'Inactivo')
             .map(p => {
             const totals = projectTotals(p.disciplines || [], projectRates(p))
             const advance = projectAdvancePct(p.disciplines || [], p.estimations || [], projectRates(p))
-            const statusClass = p.status === 'Pausado' ? 'paused' : (p.status === 'Cancelado' || p.status === 'Terminado') ? 'cancelled' : ''
+            const statusClass = p.status === 'Pausado' ? 'paused' : ['Cancelado', 'Terminado', 'Inactivo'].includes(p.status) ? 'cancelled' : ''
             return (
               <div key={p.id} className={`project-card ${statusClass}`} onClick={() => navigate(`/projects/${p.id}/setup`)}>
                 <span className={`state-badge state-${p.status}`}>{p.status}</span>

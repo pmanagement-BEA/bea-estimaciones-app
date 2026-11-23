@@ -28,7 +28,7 @@ export default function Proyecciones() {
   const [datos, setDatos] = useState(null)
   const [tab, setTab] = useState('mes') // mes | anio | baul
   const [mes, setMes] = useState(hoy)
-  const [estado, setEstado] = useState('Activo')
+  const [estado, setEstado] = useState('Todos')
   const [area, setArea] = useState('Todas')
   const [buscar, setBuscar] = useState('')
   const [agrupar, setAgrupar] = useState(true)
@@ -122,6 +122,7 @@ export default function Proyecciones() {
     const tarjetas = base.map(b => ({ b, conceptos: conceptosDe(b, m), total: totalDe(b, m) })).filter(x => x.conceptos.length).sort((a, b) => b.total - a.total)
     if (!tarjetas.length) return <div className="empty-state"><h3>Sin proyecciones para {textoMes(m)} con estos filtros</h3></div>
     const tarjeta = ({ b, conceptos }) => <TarjetaProyeccion key={b.p.id} p={b.p} lider={b.lider} equipo={datos.equipos[b.p.id]} conceptos={conceptos} estimado={m <= hoy ? b.estC[m] || {} : null} cerrado={cerrado} alAbrir={abrir(b.p)}
+      aviso={b.p.status !== 'Activo' && !cerrado ? `Proyecto ${b.p.status.toLowerCase()} con proyección: corrige el estado o quita la proyección` : null}
       alAgregar={!cerrado && !estaCongelada(m) && puedeEditar(b.p) ? () => setNueva({ project_id: b.p.id, mes: m }) : null} />
     if (!agrupar) return <div className="tarjetas-proy">{tarjetas.map(tarjeta)}</div>
     const grupos = new Map()
@@ -132,6 +133,32 @@ export default function Proyecciones() {
         <div className="tarjetas-proy">{g.ts.map(tarjeta)}</div>
       </div>
     ))
+  }
+
+  // Proyectos activos (con los mismos filtros de búsqueda y "solo mis proyectos") que no tienen nada proyectado en el mes
+  const sinProyeccion = m => {
+    const t = buscar.trim().toLowerCase()
+    const conAlgo = new Set(datos.proyecciones.filter(f => f.mes === m).map(f => f.project_id))
+    const lista = datos.projects.filter(p => p.status === 'Activo' && !conAlgo.has(p.id)
+      && (!soloMios || mios[p.id] || p.user_id === profile?.id)
+      && (!t || `${p.name} ${p.client || ''} ${datos.lideres[p.id] || ''}`.toLowerCase().includes(t)))
+      .sort((a, b) => a.name.localeCompare(b.name, 'es', { numeric: true }))
+    if (!lista.length) return null
+    const abierto = !estaCongelada(m)
+    return (
+      <details className="sin-proy" open>
+        <summary>⚠ {lista.length} {lista.length === 1 ? 'proyecto activo sin' : 'proyectos activos sin'} proyección en {textoMes(m)}<span>{abierto ? 'si no se va a cobrar nada, no hay que hacer nada' : 'el mes ya está congelado'}</span></summary>
+        <ul>
+          {lista.map(p => (
+            <li key={p.id}>
+              <a onClick={abrir(p)} className="nombre">{p.name}</a>
+              <span className="lider">{datos.lideres[p.id] || 'Sin líder asignado'}</span>
+              {abierto && puedeEditar(p) ? <button className="btn btn-outline btn-sm" onClick={() => setNueva({ project_id: p.id, mes: m })}>＋ Proyectar</button> : <span />}
+            </li>
+          ))}
+        </ul>
+      </details>
+    )
   }
 
   // Sumas por mes y área de los proyectos filtrados
@@ -156,7 +183,7 @@ export default function Proyecciones() {
     <div className="card mb-md filtros-proy">
       <input type="search" placeholder="Buscar proyecto, cliente o responsable…" value={buscar} onChange={e => setBuscar(e.target.value)} style={{ fontSize: 13, minWidth: 240 }} />
       <select value={estado} onChange={e => setEstado(e.target.value)} style={{ fontSize: 13 }}>
-        {['Activo', 'Pausado', 'Terminado', 'Todos'].map(s => <option key={s} value={s}>{s === 'Todos' ? 'Todos los estados' : `Proyectos ${s.toLowerCase()}s`}</option>)}
+        {['Todos', 'Activo', 'Pausado', 'Inactivo', 'Terminado', 'Cancelado'].map(s => <option key={s} value={s}>{s === 'Todos' ? 'Todos los estados' : `Proyectos ${s.toLowerCase()}s`}</option>)}
       </select>
       <select value={area} onChange={e => setArea(e.target.value)} style={{ fontSize: 13 }}>
         <option value="Todas">Todas las áreas</option>
@@ -197,6 +224,7 @@ export default function Proyecciones() {
       {filtros}
       {kpisMes(mes, false)}
       {listaDelMes(mes, false)}
+      {sinProyeccion(mes)}
     </>
   )
 

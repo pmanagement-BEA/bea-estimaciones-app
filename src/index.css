@@ -683,3 +683,14 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .form-anuncio .acciones{display:flex;gap:6px}
 .t-pest{display:flex;align-items:center}
 .por-aprobar .sub{font-size:12px;color:var(--text-muted)}
+.state-Inactivo{background:#EEF1F4;color:var(--text-muted)}
+.aviso-estado{font-size:12px;color:#7A4B00;background:#FFF8EC;border:1px solid #F5D9A8;border-radius:6px;padding:5px 8px;margin:-2px 0 8px}
+.sin-proy{margin-top:18px;background:#fff;border:1px solid var(--border);border-left:4px solid #F59E0B;border-radius:10px;padding:10px 14px}
+.sin-proy summary{cursor:pointer;font-weight:700;color:var(--navy);font-size:14px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline}
+.sin-proy summary span{font-weight:400;font-size:12px;color:var(--text-muted)}
+.sin-proy ul{list-style:none;margin:10px 0 0;padding:0}
+.sin-proy li{display:grid;grid-template-columns:minmax(0,1fr) minmax(120px,220px) auto;gap:10px;align-items:center;padding:6px 0;border-top:1px solid var(--border);font-size:13px}
+.sin-proy .nombre{color:var(--navy);font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sin-proy .nombre:hover{text-decoration:underline}
+.sin-proy .lider{color:var(--text-muted);font-size:12px}
+@media (max-width:600px){.sin-proy li{grid-template-columns:1fr auto}.sin-proy .lider{display:none}}

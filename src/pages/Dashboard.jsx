@@ -148,7 +148,7 @@ export default function Dashboard() {
 
       {/* Filtro estado */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        {['Activo', 'Pausado', 'Terminado', 'Cancelado', 'Todos'].map(s => (
+        {['Activo', 'Pausado', 'Inactivo', 'Terminado', 'Cancelado', 'Todos'].map(s => (
           <button key={s}
             className={`btn btn-sm ${statusFilter === s ? 'btn-primary' : 'btn-outline'}`}
             onClick={() => setStatusFilter(s)}>
