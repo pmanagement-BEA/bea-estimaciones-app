@@ -325,3 +325,16 @@ input[type="checkbox"]{width:16px;height:16px;cursor:pointer;accent-color:var(--
   body.imprimiendo-breve .estimacion-breve .eb-pie { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; margin: 0; padding: 7px 0 0 }
 }
 @media screen { .eb-oculta { display: none } }
+
+/* Proyectado para este mes (aviso compacto en la estimación) */
+.tabla-proyectados{width:100%;border-collapse:collapse;font-size:12px;table-layout:fixed}
+.tabla-proyectados td{padding:4px 6px;border-top:1px solid var(--border);vertical-align:middle;background:transparent}
+.tabla-proyectados td.clave{width:56px;font-weight:700;white-space:nowrap}
+.tabla-proyectados td.desc{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tabla-proyectados td.area{width:128px;white-space:nowrap;color:var(--text-muted);font-size:11px}
+.tabla-proyectados td.area span{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px}
+.tabla-proyectados td.num{width:104px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tabla-proyectados td.estado{width:150px;font-size:11px;white-space:nowrap}
+.tabla-proyectados td.accion{width:64px;text-align:right}
+.btn-link-mini{background:none;border:0;padding:0;color:var(--green-dark);font:inherit;font-size:11px;font-weight:600;cursor:pointer;text-decoration:underline}
+@media (max-width: 760px){ .tabla-proyectados td.area,.tabla-proyectados td.estado{display:none} }
