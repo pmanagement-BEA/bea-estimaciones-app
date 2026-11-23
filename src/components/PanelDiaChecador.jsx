@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { toast } from './Toast'
-import { HORARIO, diaIso, hhmm, textoDiaLargo, textoHoras, fechaHora, aInstante, sumarDias, abierta, sinSalida } from '../lib/checador'
+import { HORARIO, nombreDia, esEvento, diaIso, hhmm, hhmmss, textoDiaLargo, textoHoras, fechaHora, aInstante, sumarDias, abierta, sinSalida } from '../lib/checador'
 
 const TIPO = { laborable: 'Día laborable', descanso: 'Fin de semana', festivo: 'Día festivo' }
 const textoFranjas = fs => (fs?.length ? fs.map(f => `${hhmm(f.entrada)}–${f.salida ? hhmm(f.salida) : '…'}`).join(', ') : 'sin franjas')
@@ -58,7 +58,8 @@ export default function PanelDiaChecador({ dia, email, nombre, nombrePorEmail = 
             <div className="quien">{nombre}</div>
             <h2>{textoDiaLargo(dia.fecha)}</h2>
             <div className="etiquetas">
-              <span className={`tipo-dia ${dia.tipo}`}>{TIPO[dia.tipo]}</span>
+              <span className={`tipo-dia ${dia.tipo}`}>{dia.tipo === 'festivo' && nombreDia(dia.fecha) ? `Festivo · ${nombreDia(dia.fecha)}` : TIPO[dia.tipo]}</span>
+              {esEvento(dia.fecha) && <span className="tipo-dia evento">{nombreDia(dia.fecha)}</span>}
               {dia.ediciones.length > 0 && <span className="editado">EDITADO</span>}
             </div>
           </div>
@@ -67,7 +68,7 @@ export default function PanelDiaChecador({ dia, email, nombre, nombrePorEmail = 
 
         <div className="cuerpo">
           <div className="bloque referencia">
-            <div><span className="lbl">Horario de referencia</span>{dia.tipo === 'laborable' ? `${HORARIO.inicio} a ${HORARIO.fin} · ${HORARIO.horas} h` : 'No laborable'}</div>
+            <div><span className="lbl">Horario de referencia</span>{dia.tipo === 'laborable' ? `${HORARIO.bloques} · ${HORARIO.horas} h (${HORARIO.descanso})` : 'No laborable'}</div>
           </div>
 
           {!editando ? (
@@ -78,8 +79,8 @@ export default function PanelDiaChecador({ dia, email, nombre, nombrePorEmail = 
                   <ul className="franjas">
                     {dia.franjas.map(f => (
                       <li key={f.id} className={sinSalida(f) ? 'sin' : abierta(f) ? 'abierta' : ''}>
-                        <span className="hm">{hhmm(f.entrada)}</span><span className="flecha">→</span>
-                        <span className="hm">{f.salida ? hhmm(f.salida) : abierta(f) ? 'ahora' : 'sin salida'}</span>
+                        <span className="hm">{hhmmss(f.entrada)}</span><span className="flecha">→</span>
+                        <span className="hm">{f.salida ? hhmmss(f.salida) : abierta(f) ? 'ahora' : 'sin salida'}</span>
                         <span className="dur">{f.salida || abierta(f) ? textoHoras((f.salida ? new Date(f.salida) : Date.now()) - new Date(f.entrada)) : '—'}</span>
                         {f.origen === 'manual' && <span className="manual" title="Capturada al editar el día">editada</span>}
                       </li>

@@ -3,14 +3,35 @@ import { supabase } from './supabase'
 import { festivos } from '../utils/cierre.js'
 
 export const ZONA = 'America/Monterrey'
-/** Jornada de referencia (horario teórico): lunes a viernes hábiles. */
-export const HORARIO = { inicio: '08:00', fin: '17:15', horas: 8 }
+/** Jornada de referencia (horario Escalón A-NL de Woffu): lunes a viernes hábiles, 8 h con 1 h 15 de comida. */
+export const HORARIO = { inicio: '08:00', fin: '17:15', horas: 8, bloques: '08:00–13:45 · 15:00–17:15', descanso: '1 h 15 min de comida' }
+
+// Días propios de BEA (tabla calendario_bea): { 'YYYY-MM-DD': { nombre, tipo: 'festivo' | 'evento' } }
+let DIAS_BEA = {}
+export const setCalendarioBea = filas => { DIAS_BEA = Object.fromEntries((filas || []).map(f => [f.fecha, f])) }
+export const diaBea = f => DIAS_BEA[f] || null
+
+/** Nombres de los festivos de ley (los mismos que calcula utils/cierre.js). */
+function nombreFestivoLey(f) {
+  const [, m, d] = f.split('-').map(Number)
+  const lunes = fechaLocal(f).getDay() === 1
+  if (m === 1 && d === 1) return 'Año Nuevo'
+  if (m === 2 && lunes && d <= 7) return 'Día de la Constitución'
+  if (m === 3 && lunes && d >= 15 && d <= 21) return 'Natalicio de Benito Juárez'
+  if (m === 5 && d === 1) return 'Día del Trabajo'
+  if (m === 9 && d === 16) return 'Día de la Independencia'
+  if (m === 10 && d === 1) return 'Transmisión del Poder Ejecutivo'
+  if (m === 11 && lunes && d >= 15 && d <= 21) return 'Aniversario de la Revolución'
+  if (m === 12 && d === 25) return 'Navidad'
+  return 'Festivo'
+}
 const H = 3600000
 
 /** 'YYYY-MM-DD' de una fecha en hora de Monterrey. */
 export const diaIso = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: ZONA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
 /** 'HH:MM' (24 h) de un instante en hora de Monterrey. */
 export const hhmm = t => (t ? new Intl.DateTimeFormat('en-GB', { timeZone: ZONA, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t)) : '')
+export const hhmmss = t => (t ? new Intl.DateTimeFormat('en-GB', { timeZone: ZONA, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).format(new Date(t)) : '')
 export const hora = t => (t ? new Date(t).toLocaleTimeString('es-MX', { timeZone: ZONA, hour: '2-digit', minute: '2-digit' }) : '')
 export const mayuscula = t => (t ? t[0].toUpperCase() + t.slice(1) : t)
 const fechaLocal = f => new Date(f + 'T12:00:00')
@@ -36,8 +57,21 @@ export function diasEntre(desde, hasta) { const out = []; for (let f = desde; f 
 export function tipoDia(f) {
   const d = fechaLocal(f)
   if (d.getDay() === 0 || d.getDay() === 6) return 'descanso'
+  if (DIAS_BEA[f]?.tipo === 'festivo') return 'festivo'
   return festivos(d.getFullYear()).has(f) ? 'festivo' : 'laborable'
 }
+/** Nombre del festivo o evento del día ('' si no hay). */
+export function nombreDia(f) {
+  if (DIAS_BEA[f]) return DIAS_BEA[f].nombre
+  return festivos(fechaLocal(f).getFullYear()).has(f) ? nombreFestivoLey(f) : ''
+}
+export const esEvento = f => DIAS_BEA[f]?.tipo === 'evento'
+
+// Motivos de ausencia { id: { nombre, color } } para pintar los días con ausencia aprobada
+let MOTIVOS = {}
+export const setMotivosAusencia = lista => { MOTIVOS = Object.fromEntries((lista || []).map(m => [m.id, m])) }
+export const motivoAusencia = id => MOTIVOS[id] || null
+const ausenciaDelDia = (f, ausencias) => ausencias.find(a => a.inicio <= f && a.fin >= f) || null
 export const esperadasDia = f => (tipoDia(f) === 'laborable' ? HORARIO.horas * H : 0)
 
 /** Milisegundos de una franja; abierta de hoy cuenta hasta ahora, abierta de otro día no cuenta. */
@@ -58,16 +92,17 @@ export function textoHoras(ms, signo = false) {
 }
 
 /** Resumen de un día: franjas ordenadas, primera entrada, última salida, descansos, horas, esperadas y diferencia. */
-export function resumenDia(fecha, franjas = [], ediciones = [], ahora = Date.now()) {
+export function resumenDia(fecha, franjas = [], ediciones = [], ahora = Date.now(), ausencias = []) {
   const fs = [...franjas].sort((a, b) => String(a.entrada).localeCompare(String(b.entrada)))
   const ms = fs.reduce((s, c) => s + duracion(c, ahora), 0)
   let descansos = 0
   for (let i = 1; i < fs.length; i++) if (fs[i - 1].salida) descansos += Math.max(0, new Date(fs[i].entrada) - new Date(fs[i - 1].salida))
   const ultima = fs.at(-1)
-  const esperadas = esperadasDia(fecha)
+  const ausencia = esperadasDia(fecha) ? ausenciaDelDia(fecha, ausencias) : null
+  const esperadas = ausencia ? 0 : esperadasDia(fecha)
   const hoy = diaIso()
   return {
-    fecha, franjas: fs, ms, descansos, esperadas, tipo: tipoDia(fecha),
+    fecha, franjas: fs, ms, descansos, esperadas, tipo: tipoDia(fecha), ausencia,
     entrada: fs[0]?.entrada || null,
     salida: ultima ? (ultima.salida || (abierta(ultima) ? 'ahora' : null)) : null,
     // Hoy no se cuenta como faltante hasta que termine el día
@@ -78,21 +113,21 @@ export function resumenDia(fecha, franjas = [], ediciones = [], ahora = Date.now
 }
 
 /** Días de un rango (hasta hoy como máximo), del más reciente al más viejo, con su resumen. */
-export function diasDelRango(desde, hasta, checadas, ediciones = [], ahora = Date.now()) {
+export function diasDelRango(desde, hasta, checadas, ediciones = [], ahora = Date.now(), ausencias = []) {
   const tope = hasta < diaIso() ? hasta : diaIso()
   if (tope < desde) return []
   const porFecha = new Map()
   for (const c of checadas) { if (!porFecha.has(c.fecha)) porFecha.set(c.fecha, []); porFecha.get(c.fecha).push(c) }
-  return diasEntre(desde, tope).reverse().map(f => resumenDia(f, porFecha.get(f) || [], ediciones, ahora))
+  return diasEntre(desde, tope).reverse().map(f => resumenDia(f, porFecha.get(f) || [], ediciones, ahora, ausencias))
 }
 
 /** Total de un periodo: horas hechas, esperadas a la fecha y en todo el periodo, días trabajados, sin salida, editados. */
-export function resumenPeriodo(desde, hasta, checadas, ediciones = [], ahora = Date.now()) {
+export function resumenPeriodo(desde, hasta, checadas, ediciones = [], ahora = Date.now(), ausencias = []) {
   const dentro = checadas.filter(c => c.fecha >= desde && c.fecha <= hasta)
-  const dias = diasDelRango(desde, hasta, dentro, ediciones.filter(e => e.fecha >= desde && e.fecha <= hasta), ahora)
+  const dias = diasDelRango(desde, hasta, dentro, ediciones.filter(e => e.fecha >= desde && e.fecha <= hasta), ahora, ausencias)
   const hoy = diaIso()
   const esperadasFecha = dias.reduce((s, d) => s + (d.fecha < hoy ? d.esperadas : 0), 0)
-  const esperadasTotal = diasEntre(desde, hasta).reduce((s, f) => s + esperadasDia(f), 0)
+  const esperadasTotal = diasEntre(desde, hasta).reduce((s, f) => s + (ausenciaDelDia(f, ausencias) ? 0 : esperadasDia(f)), 0)
   const ms = dias.reduce((s, d) => s + d.ms, 0)
   const msAntesDeHoy = dias.reduce((s, d) => s + (d.fecha < hoy ? d.ms : 0), 0)
   const trabajados = dias.filter(d => d.ms > 0).length
@@ -102,6 +137,7 @@ export function resumenPeriodo(desde, hasta, checadas, ediciones = [], ahora = D
     promedio: trabajados ? ms / trabajados : 0,
     sinSalida: dias.reduce((s, d) => s + d.sinSalida, 0),
     editados: dias.filter(d => d.ediciones.length).length,
+    diasAusencia: dias.filter(d => d.ausencia).length,
     dias,
   }
 }
@@ -124,9 +160,11 @@ async function todas(tabla, armar) {
 
 /** Franjas vigentes (sin las borradas) y ediciones de un rango; de una persona o de todas (solo admin). */
 export async function cargarChecadas({ desde, hasta, email = null }) {
-  const [checadas, ediciones] = await Promise.all([
+  const [checadas, ediciones, ausencias] = await Promise.all([
     todas('checadas', q => { q = q.gte('fecha', desde).lte('fecha', hasta).eq('borrada', false); return (email ? q.eq('email', email) : q).order('entrada', { ascending: true }) }),
     todas('checadas_ediciones', q => { q = q.gte('fecha', desde).lte('fecha', hasta); return (email ? q.eq('email', email) : q).order('hecho_en', { ascending: false }) }),
+    // Ausencias aprobadas que tocan el rango (si la tabla todavía no existe, sin ausencias)
+    todas('ausencias', q => { q = q.eq('estado', 'aprobada').lte('inicio', hasta).gte('fin', desde); return (email ? q.eq('email', email) : q).order('inicio') }).catch(() => []),
   ])
-  return { checadas, ediciones }
+  return { checadas, ediciones, ausencias }
 }
