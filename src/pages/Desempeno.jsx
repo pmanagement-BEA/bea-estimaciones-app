@@ -136,7 +136,7 @@ function TablaAtrasos({ atrasos, onAbrir }) {
               <td><i className="dsp-punto" style={{ background: COLOR_AREA[a.area] }} />{a.area}</td>
               <td>{textoMes(a.mes)}</td>
               <td className={`n ${a.meses >= 3 ? 'mal' : 'medio'}`}>{a.meses} {a.meses === 1 ? 'mes' : 'meses'}</td>
-              <td className="n">{dinero(a.monto, a.moneda)}</td>
+              <td className="n">{a.sinMonto ? <span className="sub">sin monto</span> : dinero(a.monto, a.moneda)}</td>
             </tr>
           ))}
         </tbody>
@@ -207,10 +207,10 @@ function VistaGeneral({ r, onAbrir, onPersona }) {
   return (
     <>
       <div className="summary-grid dsp-kpis">
-        <Kpi etiqueta="Cobrado del mes" valor={mon(t.cobrado)} sub={`de ${mon(t.proyectado)} proyectado`} />
+        <Kpi etiqueta="Cobrado del mes" valor={mon(t.cobrado)} sub={`de ${mon(t.proyectado)} proyectado${r.mes === mesIso(new Date()) ? ' · mes en curso: se cobra al cierre' : ''}`} />
         <Kpi etiqueta="Cumplimiento de proyección" valor={pct(t.cumplimiento)} sub="cobrado ÷ proyectado (MXN)" tono={semaforo(t.cumplimiento, 95, 60)} />
         <Kpi etiqueta="Por estimar" valor={mon(t.porEstimar)} sub={`${t.proyectosActivos} proyectos activos`} />
-        <Kpi etiqueta="Proyectos con atraso" valor={t.atrasados} sub={`${r.atrasos.length} conceptos proyectados sin cobrar`} tono={t.atrasados ? 'mal' : 'ok'} />
+        <Kpi etiqueta="Proyectos con atraso" valor={t.atrasados} sub={`${r.atrasos.length} conceptos atrasados`} tono={t.atrasados ? 'mal' : 'ok'} />
         <Kpi etiqueta="Horas del mes" valor={hrs(t.horas)} sub={`${t.habiles} días hábiles · ${pct(t.pctIndirectas)} indirectas`} />
         <Kpi etiqueta="Utilización del equipo" valor={pct(t.utilizacion)} sub="horas ÷ (días hábiles × 8 h)" tono={semaforo(t.utilizacion, 85, 60)} />
         <Kpi etiqueta="Cobrado por hora" valor={t.porHora ? dinero(t.porHora) : '—'} sub="cobrado del mes (MXN) ÷ horas" />
@@ -253,7 +253,7 @@ function VistaGeneral({ r, onAbrir, onPersona }) {
       <Seccion titulo="Proyectos activos" sub="avance, cobro del mes, horas y eficiencia">
         <TablaProyectos filas={[...r.proyectos].sort((a, b) => b.proyectadoMesTotal - a.proyectadoMesTotal || a.p.name.localeCompare(b.p.name))} onAbrir={onAbrir} />
       </Seccion>
-      <Seccion titulo="Atrasos" sub="proyectado en meses pasados y todavía sin cobrar"><TablaAtrasos atrasos={r.atrasos} onAbrir={onAbrir} /></Seccion>
+      <Seccion titulo="Atrasos" sub="conceptos cuya última proyección ya pasó y siguen sin cobrar"><TablaAtrasos atrasos={r.atrasos} onAbrir={onAbrir} /></Seccion>
       <Seccion titulo="Equipo" sub={textoMes(r.mes)}><TablaPersonas personas={r.personas.filter(g => g.activo || g.horas)} onElegir={onPersona} /></Seccion>
       <Seccion titulo="Alertas de consistencia y calidad de captura"><Alertas alertas={r.alertas} /></Seccion>
       <IssuesLog />
