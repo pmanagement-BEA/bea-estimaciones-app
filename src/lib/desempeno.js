@@ -89,7 +89,8 @@ export function calcularDesempeno(datos, hoy = new Date()) {
     sumarHoras(r.email, '', r.proyecto_id, mesDe(r), h)
     horasAppPorTp[r.proyecto_id] = (horasAppPorTp[r.proyecto_id] || 0) + h
     const tp = tpPorId.get(String(r.proyecto_id))
-    if (mesDe(r) === mes && tp?.project_id && !r.concepto_id && !esIndirecto(tp)) sinConcepto.push(r)
+    // Sin concepto: ni concepto del contrato ni actividad (las generales como reuniones o traslados sí cuentan como capturadas)
+    if (mesDe(r) === mes && tp?.project_id && !r.concepto_id && !r.actividad_id && !esIndirecto(tp)) sinConcepto.push(r)
   }
 
   // ── Proyectos de la app
