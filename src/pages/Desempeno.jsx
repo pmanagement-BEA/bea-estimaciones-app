@@ -337,7 +337,7 @@ function VistaIndividual({ r, clave, onAbrir }) {
           ) : <p className="dsp-vacio">Sin horas registradas en el mes.</p>}
         </Seccion>
       </div>
-      {tpSel && <Seccion titulo="Desglose del proyecto" sub="indicadores H-H y concepto por concepto"><ProyectoDetalle tpId={tpSel} email={g.email} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} /></Seccion>}
+      {tpSel && <Seccion titulo="Desglose del proyecto" sub="indicadores H-H y concepto por concepto"><ProyectoDetalle key={tpSel} tpId={tpSel} email={g.email} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} /></Seccion>}
       <Seccion titulo="Proyectos que lidera"><TablaProyectos filas={lider} onAbrir={onAbrir} /></Seccion>
       <Seccion titulo="Atrasos en sus proyectos"><TablaAtrasos atrasos={atrasos} onAbrir={onAbrir} /></Seccion>
     </>
