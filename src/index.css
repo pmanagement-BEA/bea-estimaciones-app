@@ -1026,3 +1026,5 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .dsp-lista-h .n.ok{color:var(--green-dark);font-weight:700}.dsp-lista-h .n.medio{color:#b07d00;font-weight:700}.dsp-lista-h .n.mal{color:#d64545;font-weight:700}
 .dsp-lista-h.compacta li{padding:3px 4px;font-size:12px}
 @media (max-width:700px){ .dsp-lista-h li{grid-template-columns:1fr 90px 90px} .dsp-lista-h li > :last-child{display:none} }
+.dsp-tag-t{font-size:9.5px;background:var(--surface-2);color:var(--text-soft);border-radius:99px;padding:0 6px;margin-right:6px;font-weight:700;text-transform:uppercase}
+.dsp-lista-h li.toggl .h i{background:#8a97a8}
