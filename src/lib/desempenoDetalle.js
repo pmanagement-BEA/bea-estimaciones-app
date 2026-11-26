@@ -66,7 +66,7 @@ export function detalleProyecto(datos, { tpId, projectId, email } = {}) {
     if (baseMes && m > baseMes) { if (AREAS.includes(d?.area)) horasArea[d.area] += h; else horasSinArea += h }
   }
   for (const r of historico) if (tpIds.has(String(r.proyecto_id))) sumarPersona(r.email, r.nombre, r.mes, (+r.segundos || 0) / 3600)
-  const porConcepto = {}; let generales = 0, sinConcepto = 0
+  const porConcepto = {}, enTrack = {}; let generales = 0, sinConcepto = 0
   for (const r of registros) {
     if (!tpIds.has(String(r.proyecto_id))) continue
     const h = duracionMs(r) / H
@@ -75,6 +75,10 @@ export function detalleProyecto(datos, { tpId, projectId, email } = {}) {
     if (r.concepto_id) porConcepto[r.concepto_id] = (porConcepto[r.concepto_id] || 0) + h
     else if (r.actividad_id) generales += h
     else sinConcepto += h
+    // Actividad por actividad de lo registrado en Track (concepto, actividad o descripción)
+    const k = r.concepto_id ? 'c:' + r.concepto_id : r.actividad_id ? 'a:' + r.actividad_id : 'd:' + (r.descripcion || '').trim().toLowerCase()
+    const x = (enTrack[k] ||= { k, conceptoId: r.concepto_id || null, actividadId: r.actividad_id || null, descripcion: (r.descripcion || '').trim(), horas: 0, mes: 0, registros: 0 })
+    x.horas += h; x.registros++; if (mesDe(r) === mes) x.mes += h
   }
 
   // ── Dinero por área (todos los proyectos de la clave, como el RC-OP-43)
@@ -140,8 +144,15 @@ export function detalleProyecto(datos, { tpId, projectId, email } = {}) {
 
   return {
     clave, titulo, proyecto, tp, moneda, areas, conceptos, baseMes, tieneRcOp43: Object.keys(pres).length > 0,
-    horasSinArea, generales, sinConcepto, horasConcepto: Object.values(porConcepto).reduce((a, b) => a + b, 0),
+    horasSinArea, generales, sinConcepto, enTrack: Object.values(enTrack).sort((a, b) => b.horas - a.horas), horasConcepto: Object.values(porConcepto).reduce((a, b) => a + b, 0),
     personas: Object.values(personas).filter(x => x.total > 0.05).sort((a, b) => b.mes - a.mes || b.total - a.total),
     tpIds: [...tpIds], varios: deLaClave.length > 1,
   }
+}
+
+/** Nombres de actividades de Track por id */
+export async function nombresActividades(ids) {
+  if (!ids.length) return {}
+  const { data } = await supabase.from('track_actividades').select('id, nombre').in('id', ids)
+  return Object.fromEntries((data || []).map(a => [String(a.id), a.nombre]))
 }

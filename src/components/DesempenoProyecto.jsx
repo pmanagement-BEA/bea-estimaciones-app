@@ -1,7 +1,9 @@
 // Desglose de un proyecto dentro del reporte de desempeño (se abre al picarle a un proyecto).
+// Arriba, una tarjeta por área con el semáforo H-H (RC-OP-43); al picarle se abren sus números y se filtran
+// los conceptos. Abajo, pestañas: Conceptos · Actividades de Toggl · Equipo.
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { fmtMoney } from '../utils/format'
-import { detalleProyecto, cargarActividadesHoras } from '../lib/desempenoDetalle'
+import { detalleProyecto, cargarActividadesHoras, nombresActividades } from '../lib/desempenoDetalle'
 import { COLOR_AREA, textoMes, nombreCorto } from '../lib/proyecciones'
 import { num } from '../lib/track'
 
@@ -11,158 +13,194 @@ const ETQ = { 'Consultoría': 'CV', 'Commissioning': 'CX', 'Modelación': 'ME' }
 const dinero = (n, moneda = 'MXN') => (n == null || isNaN(n) ? '—' : fmtMoney(Math.round(n), moneda).replace(/\.00$/, ''))
 const hrs = (n, dec = 0) => (n == null || isNaN(n) ? '—' : `${num(n, dec)} h`)
 const pct = (x, dec = 0) => (x == null || isNaN(x) ? '—' : `${num(x * 100, dec)}%`)
-const veces = x => (x == null || isNaN(x) ? '—' : num(x, 2))
 /** Semáforo del RC-OP-43: ≥ 1 bien · 0.8–1 atención · < 0.8 mal */
 const tono = x => (x == null || isNaN(x) ? '' : x >= 1 ? 'ok' : x >= 0.8 ? 'medio' : 'mal')
-const flecha = x => (x == null || isNaN(x) ? '' : x >= 1 ? '▲' : '▼')
 
-function Barra({ valor, max = 1, color }) {
-  const w = Math.max(0, Math.min(100, (valor || 0) / (max || 1) * 100))
-  return <span className="dsp-barra"><span style={{ width: `${w}%`, background: color || 'var(--green)' }} /></span>
+/** Frase corta de cómo va el área */
+function veredicto(a) {
+  if (a.presupuestoHH == null) return 'Sin presupuesto H-H en el RC-OP-43'
+  if (a.restantes < 0) return `Se pasó ${hrs(-a.restantes)} del presupuesto`
+  if (a.desviacion == null) return `${hrs(a.restantes)} de margen`
+  if (a.desviacion >= 1) return `Va bien · ${hrs(a.restantes)} de margen`
+  if (a.desviacion >= 0.8) return `Atención · quedan ${hrs(a.restantes)}`
+  return `Gasta horas más rápido que el avance · quedan ${hrs(a.restantes)}`
 }
 
-export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar }) {
+/** Consumo de horas contra avance, en una sola barra */
+function DobleBarra({ consumo, avance, color }) {
+  const tope = Math.max(1, consumo || 0, avance || 0)
+  const w = x => `${Math.min(100, (x || 0) / tope * 100)}%`
+  return (
+    <div className="dsp-doble" title={`Horas consumidas ${pct(consumo)} · avance cobrado ${pct(avance)}`}>
+      <div className="fila"><span>Horas</span><div className="pista"><i className={consumo > 1 ? 'pasado' : ''} style={{ width: w(consumo) }} />{tope > 1 && <b style={{ left: w(1) }} />}</div><em>{pct(consumo)}</em></div>
+      <div className="fila"><span>Avance</span><div className="pista"><i style={{ width: w(avance), background: color }} />{tope > 1 && <b style={{ left: w(1) }} />}</div><em>{pct(avance)}</em></div>
+    </div>
+  )
+}
+
+function Dato({ etiqueta, valor, nota, tono: t }) {
+  return <div className={`dsp-dato ${t || ''}`}><span>{etiqueta}</span><b>{valor}</b>{nota && <small>{nota}</small>}</div>
+}
+
+export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar, pestanaInicial = 'conceptos' }) {
   const datos = useContext(DatosDesempeno)
   const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId, projectId, email }) : null), [datos, tpId, projectId, email])
+  const [areaSel, setAreaSel] = useState(null)
+  const [pestana, setPestana] = useState(pestanaInicial)
+  const [nombres, setNombres] = useState({})
+  const [filtro, setFiltro] = useState('pendientes')
   const [actividades, setActividades] = useState(null)
-  const [verCobrados, setVerCobrados] = useState(false)
   const ids = d?.tpIds.join(',')
+  const idsAct = (d?.enTrack || []).filter(x => x.actividadId).map(x => String(x.actividadId)).join(',')
   useEffect(() => {
+    if (!idsAct) return
     let vivo = true
-    setActividades(null)
-    if (ids) cargarActividadesHoras(ids.split(',')).then(a => { if (vivo) setActividades(a) })
-    else setActividades([])
+    nombresActividades(idsAct.split(',')).then(n => { if (vivo) setNombres(n) })
     return () => { vivo = false }
-  }, [ids])
+  }, [idsAct])
+  useEffect(() => {
+    if (pestana !== 'actividades' || actividades) return
+    let vivo = true
+    cargarActividadesHoras(ids ? ids.split(',') : []).then(a => { if (vivo) setActividades(a) })
+    return () => { vivo = false }
+  }, [pestana, ids, actividades])
   if (!d) return null
 
-  const visibles = d.conceptos.filter(c => verCobrados || c.estado !== 'Cobrado' || c.horas > 0)
-  const ocultos = d.conceptos.length - visibles.length
-  const maxAct = actividades?.[0]?.horas_toggl || 1
+  const a = d.areas.find(x => x.area === areaSel)
+  const conHoras = d.horasConcepto > 0.01
+  const deArea = d.conceptos.filter(c => !areaSel || c.area === areaSel)
+  const cuenta = { pendientes: deArea.filter(c => c.estado !== 'Cobrado').length, cobrados: deArea.filter(c => c.estado === 'Cobrado').length, todos: deArea.length }
+  const lista = deArea.filter(c => filtro === 'todos' || (filtro === 'cobrados' ? c.estado === 'Cobrado' : c.estado !== 'Cobrado'))
+  const maxMonto = Math.max(1, ...lista.map(c => c.monto))
   const persona = email ? d.personas.find(p => p.email?.toLowerCase() === email.toLowerCase()) : null
+  const maxAct = actividades?.[0]?.horas_toggl || 1
 
   return (
     <div className="dsp-detalle">
       <div className="dsp-detalle-tit">
         <div>
           <b>{d.titulo}</b>
-          <span className="sub"> · clave {d.clave || '—'}{d.varios ? ' · los indicadores H-H suman todos los proyectos de la clave (como el RC-OP-43)' : ''}</span>
-          {persona && <div className="sub">Horas de {nombreCorto(persona.nombre)}: {hrs(persona.mes, 1)} en {textoMes(datos.mes)} · {hrs(persona.total, 1)} en 12 meses</div>}
+          {persona && <span className="dsp-pill">{nombreCorto(persona.nombre)}: {hrs(persona.mes, 1)} este mes</span>}
+          {d.varios && <span className="dsp-pill suave" title="El RC-OP-43 mide por clave: se suman todos los proyectos de la clave">clave {d.clave} · portafolio</span>}
         </div>
-        <div className="no-print" style={{ display: 'flex', gap: 6 }}>
-          {d.proyecto && onAbrir && <button className="btn btn-outline btn-sm" onClick={() => onAbrir(d.proyecto)}>Ver estimaciones</button>}
+        <div className="no-print dsp-acciones">
+          {d.proyecto && onAbrir && <button className="btn btn-outline btn-sm" onClick={() => onAbrir(d.proyecto)}>Estimaciones →</button>}
           {onCerrar && <button className="btn btn-outline btn-sm" onClick={onCerrar} aria-label="Cerrar desglose">✕</button>}
         </div>
       </div>
 
-      {/* Indicadores por área (RC-OP-43) */}
-      <h4 className="dsp-sub">Horas-hombre contra avance, por área</h4>
-      {!d.tieneRcOp43 && <p className="dsp-vacio">La clave {d.clave || '—'} no tiene presupuesto H-H en el RC-OP-43; se muestran solo los montos.</p>}
+      {/* Tarjetas por área */}
       {d.areas.length ? (
-        <div className="dsp-tabla-wrap">
-          <table className="dsp-tabla">
-            <thead><tr>
-              <th>Área</th><th className="n">Presupuesto H-H</th><th className="n">H-H acumuladas</th><th className="n">Consumo</th><th className="n">Avance (cobrado)</th>
-              <th className="n" title="Avance ÷ consumo de horas. ≥ 1 bien · 0.8–1 atención · < 0.8 se pasan de horas">Desviación</th>
-              <th className="n" title="Lo contratado del área ÷ H-H presupuestadas">$/h plan</th>
-              <th className="n" title="Lo cobrado del área ÷ H-H acumuladas">$/h real</th>
-              <th className="n">H-H restantes</th>
-              <th className="n" title="Lo que falta por cobrar ÷ H-H restantes: a cuánto tiene que salir cada hora de aquí al final">$/h para cerrar</th>
-              <th className="n" title="H-H acumuladas ÷ avance: cuántas horas va a costar el área completa a este ritmo">H-H al terminar</th>
-            </tr></thead>
-            <tbody>
-              {d.areas.map(a => {
-                const relHora = a.hhReal != null && a.hhPresupuesto ? a.hhReal / a.hhPresupuesto : null
-                const relFinal = a.alTerminar != null && a.presupuestoHH ? a.presupuestoHH / a.alTerminar : null
-                return (
-                  <tr key={a.area}>
-                    <td><i className="dsp-punto" style={{ background: COLOR_AREA[a.area] }} />{ETQ[a.area]} · {a.area}</td>
-                    <td className="n">{hrs(a.presupuestoHH)}</td>
-                    <td className="n">{hrs(a.hh)}</td>
-                    <td className="n"><Barra valor={a.consumo} max={1} color={a.consumo > 1 ? '#d64545' : undefined} /> {pct(a.consumo)}</td>
-                    <td className="n"><Barra valor={a.avance} max={1} color={COLOR_AREA[a.area]} /> {pct(a.avance)}</td>
-                    <td className={`n ${tono(a.desviacion)}`}>{veces(a.desviacion)} {flecha(a.desviacion)}</td>
-                    <td className="n">{dinero(a.hhPresupuesto, d.moneda)}</td>
-                    <td className={`n ${tono(relHora)}`}>{dinero(a.hhReal, d.moneda)} {flecha(relHora)}</td>
-                    <td className={`n ${a.restantes != null && a.restantes < 0 ? 'mal' : ''}`}>{hrs(a.restantes)}</td>
-                    <td className="n">{dinero(a.hhNecesario, d.moneda)}</td>
-                    <td className={`n ${tono(relFinal)}`}>{hrs(a.alTerminar)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="dsp-areas">
+          {d.areas.map(x => (
+            <button key={x.area} className={`dsp-area ${tono(x.desviacion)}${areaSel === x.area ? ' sel' : ''}`} onClick={() => setAreaSel(areaSel === x.area ? null : x.area)} aria-pressed={areaSel === x.area}>
+              <div className="cab">
+                <span><i className="dsp-punto" style={{ background: COLOR_AREA[x.area] }} />{ETQ[x.area]} · {x.area}</span>
+                <span className={`desv ${tono(x.desviacion)}`} title="Desviación = avance ÷ horas consumidas">{x.desviacion == null ? '—' : num(x.desviacion, 2)}</span>
+              </div>
+              {x.presupuestoHH != null ? <DobleBarra consumo={x.consumo} avance={x.avance} color={COLOR_AREA[x.area]} /> : <div className="sub">Avance cobrado {pct(x.avance)}</div>}
+              <div className="ver">{veredicto(x)}</div>
+            </button>
+          ))}
         </div>
       ) : <p className="dsp-vacio">Este proyecto no tiene alcance cargado en la app.</p>}
-      {d.baseMes && <p className="dsp-nota">H-H acumuladas = acumulado del RC-OP-43 al cierre de {textoMes(d.baseMes)} + horas de Toggl y Track después de esa fecha, según el área de cada persona en el Directorio{d.horasSinArea > 0.05 ? ` (${hrs(d.horasSinArea, 1)} de personas sin área no entran)` : ''}.</p>}
 
-      {/* Concepto por concepto */}
-      <h4 className="dsp-sub">Concepto por concepto: lo que se cobra contra las horas que cuesta</h4>
-      {d.horasConcepto < 0.01 && (
-        <p className="dsp-aviso">
-          Todavía no hay horas registradas por concepto{email ? ' de esta persona' : ''}. Se llenan solas cuando el equipo registra en Track eligiendo el concepto del contrato
-          {d.generales + d.sinConcepto > 0.01 ? ` (en este proyecto hay ${hrs(d.generales, 1)} en actividades generales y ${hrs(d.sinConcepto, 1)} sin concepto)` : ''}.
-          Mientras tanto se ve cuánto vale cada concepto y cuántas H-H le tocan según el presupuesto.
-        </p>
+      {a && (
+        <div className="dsp-datos">
+          <Dato etiqueta="H-H" valor={`${hrs(a.hh)} / ${hrs(a.presupuestoHH)}`} nota="acumuladas / presupuesto" />
+          <Dato etiqueta="$/h plan" valor={dinero(a.hhPresupuesto, d.moneda)} nota="contratado ÷ H-H" />
+          <Dato etiqueta="$/h real" valor={dinero(a.hhReal, d.moneda)} nota="cobrado ÷ H-H" tono={a.hhReal != null && a.hhPresupuesto ? tono(a.hhReal / a.hhPresupuesto) : ''} />
+          <Dato etiqueta="Por cobrar" valor={dinero(a.porCobrar, d.moneda)} nota={`de ${dinero(a.contratado, d.moneda)}`} />
+          {a.hhNecesario != null && <Dato etiqueta="$/h para cerrar" valor={dinero(a.hhNecesario, d.moneda)} nota="lo que falta ÷ H-H restantes" />}
+          {a.alTerminar != null && <Dato etiqueta="Al terminar" valor={hrs(a.alTerminar)} nota="H-H a este ritmo" tono={a.presupuestoHH ? tono(a.presupuestoHH / a.alTerminar) : ''} />}
+        </div>
       )}
-      {d.conceptos.length ? (
-        <div className="dsp-tabla-wrap">
-          <table className="dsp-tabla dsp-conceptos">
-            <thead><tr>
-              <th>Clave</th><th>Concepto</th><th>Área</th><th className="n">Monto</th><th className="n">Cobrado</th>
-              <th className="n" title="Monto del concepto ÷ $/h plan del área">H-H plan</th><th className="n">Horas reales</th>
-              <th className="n" title="Cobrado ÷ horas reales, contra el $/h plan. Si aún no se cobra: potencial = monto ÷ horas">$/h real</th>
-              <th className="n" title="Avance del concepto ÷ consumo de sus H-H">Desviación</th>
-            </tr></thead>
-            <tbody>
-              {visibles.map(c => {
+
+      {/* Pestañas */}
+      <div className="dsp-pestanas no-print" role="tablist">
+        {[['conceptos', `Conceptos${areaSel ? ' · ' + ETQ[areaSel] : ''}`], ['actividades', 'Actividad por actividad'], ['equipo', `Equipo (${d.personas.length})`]].map(([k, t]) => (
+          <button key={k} role="tab" aria-selected={pestana === k} className={pestana === k ? 'activa' : ''} onClick={() => setPestana(k)}>{t}</button>
+        ))}
+      </div>
+
+      {pestana === 'conceptos' && (
+        <>
+          <div className="dsp-chips">
+            {[['pendientes', 'Por cobrar'], ['cobrados', 'Cobrados'], ['todos', 'Todos']].map(([k, t]) => (
+              <button key={k} className={filtro === k ? 'activa' : ''} onClick={() => setFiltro(k)}>{t} <span>{cuenta[k]}</span></button>
+            ))}
+            {areaSel && <button className="quitar" onClick={() => setAreaSel(null)}>{ETQ[areaSel]} ✕</button>}
+            {!conHoras && <span className="dsp-hint" title="Se llenan cuando el equipo registra en Track eligiendo el concepto del contrato">ⓘ Aún sin horas por concepto</span>}
+          </div>
+          {lista.length ? (
+            <ul className="dsp-lista-c">
+              {lista.map(c => {
                 const rel = c.porHora != null && c.porHoraPres ? c.porHora / c.porHoraPres : null
                 return (
-                  <tr key={c.id} className={c.estado === 'Cobrado' ? 'cobrado' : ''}>
-                    <td><b>{c.key}</b></td>
-                    <td className="desc" title={`${c.disciplina}${d.varios && !d.proyecto ? ' · ' + c.proyecto : ''}`}>{c.descripcion}</td>
-                    <td className="sub">{ETQ[c.area]}</td>
-                    <td className="n">{dinero(c.monto, c.moneda)}</td>
-                    <td className="n">{c.cobrado > 0.5 ? dinero(c.cobrado, c.moneda) : '—'} <span className={`dsp-estado ${c.estado === 'Cobrado' ? 'ok' : c.estado === 'Parcial' ? 'medio' : ''}`}>{c.estado}</span></td>
-                    <td className="n">{c.hhPres != null ? hrs(c.hhPres, 1) : '—'}</td>
-                    <td className="n">{c.horas > 0.01 ? hrs(c.horas, 1) : '—'}</td>
-                    <td className={`n ${tono(rel)}`}>{c.porHora != null ? `${dinero(c.porHora, c.moneda)} ${flecha(rel)}` : c.porHoraPotencial != null ? <span className="sub" title="Aún no se cobra: monto ÷ horas gastadas hasta hoy">{dinero(c.porHoraPotencial, c.moneda)} potencial</span> : '—'}</td>
-                    <td className={`n ${tono(c.desviacion)}`}>{veces(c.desviacion)}</td>
-                  </tr>
+                  <li key={c.id} className={c.estado === 'Cobrado' ? 'cobrado' : ''}>
+                    <span className="clave" style={{ borderColor: COLOR_AREA[c.area] }}>{c.key}</span>
+                    <span className="texto" title={`${c.descripcion} · ${c.disciplina}`}>{c.descripcion}</span>
+                    <span className="monto">
+                      <span className="mini"><i style={{ width: `${c.monto / maxMonto * 100}%` }}><i style={{ width: `${(c.avance || 0) * 100}%` }} /></i></span>
+                      {dinero(c.monto, c.moneda)}
+                    </span>
+                    <span className="hh" title="H-H que le tocan según el presupuesto">{c.hhPres != null ? hrs(c.hhPres, 0) : ''}</span>
+                    {conHoras && (
+                      <span className={`real ${tono(rel)}`}>
+                        {c.horas > 0.01 ? <>{hrs(c.horas, 1)} · {c.porHora != null ? dinero(c.porHora, c.moneda) + '/h' : <i title="Aún no se cobra">{dinero(c.porHoraPotencial, c.moneda)}/h</i>}</> : ''}
+                      </span>
+                    )}
+                  </li>
                 )
               })}
-            </tbody>
-          </table>
-          {ocultos > 0 && <button className="btn btn-outline btn-sm no-print" style={{ marginTop: 6 }} onClick={() => setVerCobrados(true)}>Mostrar {ocultos} conceptos ya cobrados sin horas</button>}
-        </div>
-      ) : <p className="dsp-vacio">Sin conceptos en la app para este proyecto.</p>}
+            </ul>
+          ) : <p className="dsp-vacio">Nada en este filtro.</p>}
+        </>
+      )}
 
-      <div className="dsp-dos">
-        <div>
-          <h4 className="dsp-sub">Actividades de Toggl (histórico del proyecto)</h4>
+      {pestana === 'actividades' && (
+        <div className="dsp-act">
+          <h5>{email ? 'Lo que registró en Track' : 'Registrado en Track'} <span className="sub">desde que arrancó Track</span></h5>
+          {d.enTrack.length ? (
+            <ul className="dsp-reparto">
+              {d.enTrack.map(x => {
+                const c = x.conceptoId ? d.conceptos.find(k => k.id === x.conceptoId) : null
+                const nombre = c ? `${c.key} ${c.descripcion}` : x.actividadId ? nombres[String(x.actividadId)] || 'Actividad' : x.descripcion || 'Sin descripción'
+                return (
+                  <li key={x.k}>
+                    <span className="nombre" title={nombre}>{c && <span className="dsp-tag-c">concepto</span>}{nombre}</span>
+                    <span className="dsp-barra"><span style={{ width: `${x.horas / d.enTrack[0].horas * 100}%`, background: c ? 'var(--green)' : '#8a97a8' }} /></span>
+                    <span className="n">{hrs(x.horas, 1)}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : <p className="dsp-vacio">Aún no hay registros en Track para este proyecto{email ? ' de esta persona' : ''}.</p>}
+          <h5>Histórico de Toggl <span className="sub">todo el equipo, hasta el 26 nov 2026</span></h5>
           {actividades === null ? <p className="dsp-vacio">Cargando…</p> : actividades.length ? (
             <ul className="dsp-reparto">
-              {actividades.slice(0, 15).map(a => (
-                <li key={a.id}><span className="nombre" title={a.nombre}>{a.nombre}</span><Barra valor={+a.horas_toggl} max={maxAct} /><span className="n">{hrs(+a.horas_toggl, 1)}</span></li>
+              {actividades.slice(0, 15).map(x => (
+                <li key={x.id}><span className="nombre" title={x.nombre}>{x.nombre}</span><span className="dsp-barra"><span style={{ width: `${(+x.horas_toggl) / maxAct * 100}%`, background: 'var(--green)' }} /></span><span className="n">{hrs(+x.horas_toggl, 1)}</span></li>
               ))}
             </ul>
           ) : <p className="dsp-vacio">Sin actividades con horas en Toggl.</p>}
-          <p className="dsp-nota">Acumulado de todo el equipo hasta la importación (26 nov 2026). Las actividades de Toggl son genéricas, no los conceptos del contrato.</p>
         </div>
-        <div>
-          <h4 className="dsp-sub">Quién trabajó en el proyecto</h4>
-          {d.personas.length ? (
-            <table className="dsp-tabla">
-              <thead><tr><th>Persona</th><th>Área</th><th className="n">{textoMes(datos.mes)}</th><th className="n">12 meses</th></tr></thead>
-              <tbody>{d.personas.slice(0, 12).map(p => (
-                <tr key={p.nombre + p.email} className={email && p.email?.toLowerCase() === email.toLowerCase() ? 'resaltada' : ''}>
-                  <td>{nombreCorto(p.nombre)}</td><td className="sub">{ETQ[p.area] || p.area || 'Sin área'}</td><td className="n">{hrs(p.mes, 1)}</td><td className="n">{hrs(p.total, 1)}</td>
-                </tr>
-              ))}</tbody>
-            </table>
-          ) : <p className="dsp-vacio">Sin horas en los últimos 12 meses.</p>}
-        </div>
-      </div>
+      )}
+
+      {pestana === 'equipo' && (
+        d.personas.length ? (
+          <ul className="dsp-equipo">
+            {d.personas.slice(0, 15).map(p => (
+              <li key={p.nombre + p.email} className={email && p.email?.toLowerCase() === email.toLowerCase() ? 'yo' : ''}>
+                <span className="nombre">{nombreCorto(p.nombre)}</span>
+                <span className="sub">{ETQ[p.area] || 'Sin área'}</span>
+                <span className="n">{hrs(p.mes, 1)} <small>{textoMes(datos.mes).split(' ')[0].slice(0, 3).toLowerCase()}</small></span>
+                <span className="n sub">{hrs(p.total, 0)} <small>12 m</small></span>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="dsp-vacio">Sin horas en los últimos 12 meses.</p>
+      )}
     </div>
   )
 }

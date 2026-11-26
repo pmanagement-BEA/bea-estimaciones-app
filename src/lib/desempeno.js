@@ -165,6 +165,9 @@ export function calcularDesempeno(datos, hoy = new Date()) {
       cobradoMeses, proyectadoMeses, cobradoMes, proyectadoMes,
       cobradoMesTotal: sumaArea(cobradoMes), proyectadoMesTotal: sumaArea(proyectadoMes),
       horasReales, horasMes, horasEstimadas, eficiencia, porHora,
+      // Para comparar horas contra dinero en un periodo: horas del equipo y cobrado por mes
+      horasPorMes: Object.fromEntries(meses.map(m => [m, misTps.reduce((a2, t) => a2 + (horasProyMes[t.id]?.[m] || 0), 0)])),
+      cobradoPorMes: Object.fromEntries(meses.map(m => [m, sumaArea(cobradoMeses[m])])),
       termino: futuras.at(-1) || null, ligado: misTps.length > 0,
     }
   })
