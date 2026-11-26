@@ -820,24 +820,24 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 /* ── Modo oscuro (botón ☾/☀ en la barra) ── */
 :root[data-theme=dark]{
   color-scheme:dark;
-  --navy:#E6EDF3; --navy-2:#C9D4DF; --ink:#15803D;
+  --navy:#F5F5F5; --navy-2:#D6D6D6; --ink:#15803D;
   --green:#22C55E; --green-dark:#4ADE80; --green-soft:#123222;
-  --bg:#0E151D; --card:#151E28; --panel:#1A2531; --surface:#141D27; --surface-2:#1E2935;
-  --border:#283442; --border-strong:#3A4757;
-  --text:#E6EDF3; --text-soft:#B3C0CC; --text-muted:#8696A6;
+  --bg:#1E1E1E; --card:#2A2A2A; --panel:#313131; --surface:#252525; --surface-2:#363636;
+  --border:#3D3D3D; --border-strong:#505050;
+  --text:#EDEDED; --text-soft:#C2C2C2; --text-muted:#9A9A9A;
   --danger:#F87171; --danger-soft:#3B1A1D; --warning:#FBBF24; --warning-soft:#3A2E12; --info:#93C5FD;
   --shadow-sm:0 1px 2px rgba(0,0,0,.4); --shadow:0 2px 8px rgba(0,0,0,.45); --shadow-lg:0 8px 32px rgba(0,0,0,.55);
 }
-:root[data-theme=dark] body{background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.05) 1px,transparent 0) 0 0/24px 24px,var(--bg)}
+:root[data-theme=dark] body{background:radial-gradient(circle at 1px 1px,rgba(255,255,255,.07) 1px,transparent 0) 0 0/24px 24px,var(--bg)}
 :root[data-theme=dark] input,:root[data-theme=dark] select,:root[data-theme=dark] textarea{background-color:var(--card);color:var(--text);border-color:var(--border-strong)}
-:root[data-theme=dark] .topbar{background:#0B3D20;border-bottom-color:#15803D}
+:root[data-theme=dark] .topbar{background:#171717;border-bottom-color:#15803D}
 :root[data-theme=dark] .modal-overlay{background:rgba(0,0,0,.6)}
 :root[data-theme=dark] .grid-cal-trk{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(var(--px-h) - 1px),var(--border) calc(var(--px-h) - 1px),var(--border) var(--px-h))}
 :root[data-theme=dark] .bloque-cal-trk .d{color:var(--text)}
 :root[data-theme=dark] .bloque-cal-trk .p{color:color-mix(in srgb,var(--c) 65%,#fff)}
 :root[data-theme=dark] .reparto-cal-trk span{color:color-mix(in srgb,var(--c) 65%,#fff)}
 :root[data-theme=dark] .reg-trk.editando{background:#2A2412}
-:root[data-theme=dark] .cargando-cal-trk{background:rgba(14,21,29,.6)}
+:root[data-theme=dark] .cargando-cal-trk{background:rgba(30,30,30,.6)}
 :root[data-theme=dark] img.brand-logo{filter:none}
 .tema-btn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:16px;margin-right:6px;transition:background .15s}
 .tema-btn:hover{background:rgba(255,255,255,.24)}
