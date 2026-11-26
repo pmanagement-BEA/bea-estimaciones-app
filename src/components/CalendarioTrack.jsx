@@ -3,11 +3,17 @@ import { supabase } from '../lib/supabase'
 import { toast } from './Toast'
 import { diaIso, hhmm, aInstante, lunesDe, sumarDias, cargarChecadas } from '../lib/checador'
 import { cargarRegistros, duracionMs, diaDe, textoH, H } from '../lib/track'
-import { BuscadorProyecto, useOpciones, SelectorActividad, partir, juntar } from './TrackCampos'
+import { BuscadorProyecto, useOpciones, SelectorActividad, juntar, resolverActividad } from './TrackCampos'
 
 // Colores por proyecto (estables: dependen del id)
 const PALETA = ['#7C3AED', '#C026D3', '#DB2777', '#E11D48', '#EA580C', '#D97706', '#65A30D', '#16A34A', '#0D9488', '#0891B2', '#0284C7', '#2563EB', '#4F46E5', '#9333EA', '#B45309', '#047857']
 export const colorDe = id => PALETA[Math.abs(Number(id || 0)) % PALETA.length]
+/** Color de un bloque: por concepto o actividad (si no tiene, por descripción y luego por proyecto). */
+export function colorBloque(r) {
+  const k = r.concepto_id || (r.actividad_id && `a${r.actividad_id}`) || (r.descripcion || '').trim().toLowerCase() || `p${r.proyecto_id}`
+  let h = 0; for (const ch of String(k)) h = (h * 31 + ch.charCodeAt(0)) | 0
+  return PALETA[Math.abs(h) % PALETA.length]
+}
 
 const ZOOMS = [36, 48, 64, 96]          // px por hora
 const PASO = 15                          // minutos para ajustar al arrastrar
@@ -54,7 +60,9 @@ function FormRegistro({ datos, proyectos, porId, alCerrar, alGuardar }) {
     const inicio = aInstante(fecha, desde)
     const fin = hasta === '24:00' ? aInstante(sumarDias(fecha, 1), '00:00') : aInstante(fecha, hasta)
     if (fin <= inicio) { toast('La hora final debe ser después de la inicial', true); return }
-    const fila = { descripcion: desc.trim(), proyecto_id: proy.id, facturable: fact, inicio, fin, ...partir(act) }
+    let cols
+    try { cols = await resolverActividad(act, proy.id) } catch (e) { toast('No se pudo preparar la actividad: ' + e.message, true); return }
+    const fila = { descripcion: desc.trim(), proyecto_id: proy.id, facturable: fact, inicio, fin, ...cols }
     const { error } = r
       ? await supabase.from('track_registros').update({ ...fila, updated_at: new Date().toISOString() }).eq('id', r.id)
       : await supabase.from('track_registros').insert(fila)
@@ -246,7 +254,7 @@ export default function CalendarioTrack({ email, proyectos, porId, version, alCa
                 const alto = (fin - ini) * pxM
                 return (
                   <div key={b.r.id} className={`bloque-cal-trk${b.corriendo ? ' corriendo' : ''}${enArrastre ? ' arrastrando' : ''}`}
-                    style={{ top: ini * pxM, height: Math.max(14, alto - 2), left: `calc(${(b.carril / b.carriles) * 100}% + 2px)`, width: `calc(${100 / b.carriles}% - 4px)`, '--c': colorDe(b.r.proyecto_id) }}
+                    style={{ top: ini * pxM, height: Math.max(14, alto - 2), left: `calc(${(b.carril / b.carriles) * 100}% + 2px)`, width: `calc(${100 / b.carriles}% - 4px)`, '--c': colorBloque(b.r) }}
                     onPointerDown={e => empezarBloque(e, b, d)}
                     title={`${b.r.descripcion || 'sin descripción'}\n${p?.nombre || ''}\n${aHM(ini)}–${aHM(Math.min(fin, 1439))}`}>
                     <div className="d">{b.r.descripcion || <em>sin descripción</em>}</div>

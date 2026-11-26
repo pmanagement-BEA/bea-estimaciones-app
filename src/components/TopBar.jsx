@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { aplicarTema, temaGuardado } from '../lib/tema'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 // Íconos de línea (24×24, trazo 2), heredan el color del texto
@@ -24,6 +26,8 @@ const NAV = [
 ]
 
 export default function TopBar({ profile, onSignOut }) {
+  const [tema, setTema] = useState(temaGuardado())
+  const cambiarTema = () => { const t = tema === 'dark' ? 'light' : 'dark'; aplicarTema(t); setTema(t) }
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const ruta = pathname.replace(/^\/bea-estimaciones-app/, '') || '/'
@@ -43,6 +47,7 @@ export default function TopBar({ profile, onSignOut }) {
         ))}
       </nav>
       <div className="topbar-actions">
+        <button className="tema-btn" onClick={cambiarTema} title={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} aria-label={tema === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}>{tema === 'dark' ? '☀' : '☾'}</button>
         {profile && (
           <div className="usuario" title={profile.email}>
             <span className="avatar">{iniciales}</span>

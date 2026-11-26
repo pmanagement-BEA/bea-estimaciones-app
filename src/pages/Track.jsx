@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth'
 import { toast } from '../components/Toast'
 import { diaIso, hhmm, aInstante, lunesDe, sumarDias, textoDia, textoDiaLargo } from '../lib/checador'
 import { mesIso, sumarMeses, textoMes } from '../lib/proyecciones'
-import { sinAcentos, BuscadorProyecto, useOpciones, SelectorActividad, partir, juntar } from '../components/TrackCampos'
+import { sinAcentos, BuscadorProyecto, useOpciones, SelectorActividad, juntar, resolverActividad } from '../components/TrackCampos'
 import CalendarioTrack from '../components/CalendarioTrack'
 import {
   H, cargarProyectos, cargarActividades, cargarRegistros, cargarHistorico, cronometroActivo,
@@ -46,8 +46,9 @@ function Registrar({ email, proyectos, porId }) {
   function elegirProyecto(p) { setProy(p); setAct(''); setFact(p.facturable && !esIndirecto(p)) }
 
   async function iniciar(base) {
-    const datos = base || { proyecto_id: proy?.id, descripcion: desc.trim(), facturable: fact, ...partir(act) }
-    if (!datos.proyecto_id) { toast('Elige un proyecto', true); return }
+    if (!base && !proy) { toast('Elige un proyecto', true); return }
+    let datos = base
+    try { datos ||= { proyecto_id: proy.id, descripcion: desc.trim(), facturable: fact, ...(await resolverActividad(act, proy.id)) } } catch (e) { toast('No se pudo preparar la actividad: ' + e.message, true); return }
     if (activo) await detener(true)
     const { data, error } = await supabase.from('track_registros').insert({ ...datos, inicio: new Date().toISOString() }).select().single()
     if (error) { toast('No se pudo iniciar: ' + error.message, true); return }
@@ -58,7 +59,9 @@ function Registrar({ email, proyectos, porId }) {
   async function detener(silencioso) {
     if (!activo) return
     const fin = new Date(Math.max(Date.now(), new Date(activo.inicio).getTime() + 1000)).toISOString()
-    const { error } = await supabase.from('track_registros').update({ fin, descripcion: desc.trim(), proyecto_id: proy?.id || activo.proyecto_id, facturable: fact, ...partir(act), updated_at: new Date().toISOString() }).eq('id', activo.id)
+    const pid = proy?.id || activo.proyecto_id
+    const cols = await resolverActividad(act, pid).catch(() => ({}))
+    const { error } = await supabase.from('track_registros').update({ fin, descripcion: desc.trim(), proyecto_id: pid, facturable: fact, ...cols, updated_at: new Date().toISOString() }).eq('id', activo.id)
     if (error) { toast('No se pudo detener: ' + error.message, true); return }
     setActivo(null)
     if (!silencioso) { toast(`Registrado ✓ ${textoH(duracionMs({ inicio: activo.inicio, fin }))}`); setDesc(''); cargar() }
@@ -74,7 +77,9 @@ function Registrar({ email, proyectos, porId }) {
       inicio = aInstante(m.fecha, m.desde); fin = aInstante(m.fecha, m.hasta)
       if (fin <= inicio) { toast('La hora final debe ser después de la inicial', true); return }
     }
-    const { error } = await supabase.from('track_registros').insert({ proyecto_id: proy.id, descripcion: desc.trim(), facturable: fact, inicio, fin, ...partir(act) })
+    let cols
+    try { cols = await resolverActividad(act, proy.id) } catch (e) { toast('No se pudo preparar la actividad: ' + e.message, true); return }
+    const { error } = await supabase.from('track_registros').insert({ proyecto_id: proy.id, descripcion: desc.trim(), facturable: fact, inicio, fin, ...cols })
     if (error) { toast('No se pudo guardar: ' + error.message, true); return }
     toast('Tiempo agregado ✓'); setDesc(''); setM(x => ({ ...x, dur: '' })); cargar()
   }
@@ -165,7 +170,10 @@ function EditarRegistro({ r, proyectos, porId, alTerminar }) {
   async function guardar() {
     const inicio = aInstante(fecha, desde), fin = aInstante(fecha, hasta)
     if (fin <= inicio) { toast('La hora final debe ser después de la inicial', true); return }
-    const { error } = await supabase.from('track_registros').update({ descripcion: desc.trim(), proyecto_id: proy?.id || r.proyecto_id, ...partir(act), inicio, fin, facturable: fact, updated_at: new Date().toISOString() }).eq('id', r.id)
+    const pid = proy?.id || r.proyecto_id
+    let cols
+    try { cols = await resolverActividad(act, pid) } catch (e) { toast('No se pudo preparar la actividad: ' + e.message, true); return }
+    const { error } = await supabase.from('track_registros').update({ descripcion: desc.trim(), proyecto_id: pid, ...cols, inicio, fin, facturable: fact, updated_at: new Date().toISOString() }).eq('id', r.id)
     if (error) { toast('No se pudo guardar: ' + error.message, true); return }
     alTerminar()
   }
