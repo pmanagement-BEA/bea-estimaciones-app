@@ -5,8 +5,10 @@ import { useAuth } from '../hooks/useAuth'
 import { toast } from '../components/Toast'
 import { diaIso, hhmm, aInstante, lunesDe, sumarDias, textoDia, textoDiaLargo } from '../lib/checador'
 import { mesIso, sumarMeses, textoMes } from '../lib/proyecciones'
+import { sinAcentos, BuscadorProyecto, useOpciones, SelectorActividad, partir, juntar } from '../components/TrackCampos'
+import CalendarioTrack from '../components/CalendarioTrack'
 import {
-  H, cargarProyectos, cargarActividades, cargarConceptos, cargarRegistros, cargarHistorico, cronometroActivo,
+  H, cargarProyectos, cargarActividades, cargarRegistros, cargarHistorico, cronometroActivo,
   duracionMs, diaDe, textoH, horas, num, reloj, esIndirecto, leerDuracion,
 } from '../lib/track'
 
@@ -15,77 +17,6 @@ function useAhora(ms = 1000) {
   useEffect(() => { const i = setInterval(() => setT(Date.now()), ms); return () => clearInterval(i) }, [ms])
   return t
 }
-
-const sinAcentos = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
-
-// ── Buscador de proyecto (escribe clave, nombre o cliente) ──
-function BuscadorProyecto({ proyectos, valor, alElegir, placeholder = 'Proyecto (clave, nombre o cliente)…' }) {
-  const [txt, setTxt] = useState('')
-  const [abierto, setAbierto] = useState(false)
-  const elegido = proyectos.find(p => p.id === valor)
-  const lista = useMemo(() => {
-    const q = sinAcentos(txt)
-    const activos = proyectos.filter(p => p.activo)
-    if (!q) return activos.slice(0, 40)
-    return activos.filter(p => sinAcentos(`${p.nombre} ${p.cliente}`).includes(q)).slice(0, 40)
-  }, [txt, proyectos])
-  return (
-    <div className="buscador-trk">
-      <input
-        value={abierto ? txt : (elegido?.nombre || '')}
-        placeholder={placeholder}
-        onFocus={() => { setAbierto(true); setTxt('') }}
-        onBlur={() => setTimeout(() => setAbierto(false), 150)}
-        onChange={e => setTxt(e.target.value)}
-        aria-label="Proyecto"
-      />
-      {abierto && (
-        <ul className="opciones-trk" role="listbox">
-          {lista.length === 0 && <li className="vacio">Sin coincidencias</li>}
-          {lista.map(p => (
-            <li key={p.id} role="option" aria-selected={p.id === valor} onMouseDown={() => { alElegir(p); setAbierto(false) }}>
-              <span className="nom">{p.nombre}</span><span className="cli">{p.cliente}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  )
-}
-
-/** Actividades de Toggl del proyecto + conceptos de su estimación (si está ligado a la app). */
-function useOpciones(proyecto) {
-  const [ops, setOps] = useState({ actividades: [], conceptos: [] })
-  useEffect(() => {
-    if (!proyecto) { setOps({ actividades: [], conceptos: [] }); return }
-    let vivo = true
-    Promise.all([cargarActividades(proyecto.id), cargarConceptos(proyecto.project_id)])
-      .then(([a, c]) => vivo && setOps({ actividades: a.filter(x => x.activo), conceptos: c }))
-      .catch(() => vivo && setOps({ actividades: [], conceptos: [] }))
-    return () => { vivo = false }
-  }, [proyecto?.id])
-  return ops
-}
-
-function SelectorActividad({ ops, valor, alCambiar }) {
-  return (
-    <select value={valor} onChange={e => alCambiar(e.target.value)} aria-label="Actividad">
-      <option value="">— Actividad (opcional) —</option>
-      {ops.conceptos.length > 0 && (
-        <optgroup label="Conceptos de la estimación">
-          {ops.conceptos.map(c => <option key={c.id} value={`c:${c.id}`}>{c.key} {c.description}</option>)}
-        </optgroup>
-      )}
-      {ops.actividades.length > 0 && (
-        <optgroup label="Actividades (Toggl)">
-          {ops.actividades.map(a => <option key={a.id} value={`a:${a.id}`}>{a.nombre}</option>)}
-        </optgroup>
-      )}
-    </select>
-  )
-}
-const partir = v => ({ actividad_id: v?.startsWith('a:') ? +v.slice(2) : null, concepto_id: v?.startsWith('c:') ? v.slice(2) : null })
-const juntar = r => (r.concepto_id ? `c:${r.concepto_id}` : r.actividad_id ? `a:${r.actividad_id}` : '')
 
 // ── Registrar ──
 function Registrar({ email, proyectos, porId }) {
@@ -99,12 +30,15 @@ function Registrar({ email, proyectos, porId }) {
   const [m, setM] = useState({ fecha: diaIso(), desde: '09:00', hasta: '10:00', dur: '' })
   const [recientes, setRecientes] = useState(null)
   const [editando, setEditando] = useState(null)
+  const [vistaReg, setVistaReg] = useState(() => { try { return localStorage.getItem('track_vista') || 'calendario' } catch { return 'calendario' } })
+  const [version, setVersion] = useState(0)
   const ops = useOpciones(proy)
+  const cambiarVista = v => { setVistaReg(v); try { localStorage.setItem('track_vista', v) } catch { /* sin storage */ } }
 
   async function cargar() {
     const hoy = diaIso()
     const [a, r] = await Promise.all([cronometroActivo(email), cargarRegistros({ desde: sumarDias(hoy, -13), hasta: hoy, email })])
-    setActivo(a); setRecientes(r)
+    setActivo(a); setRecientes(r); setVersion(v => v + 1)
     if (a) { setDesc(a.descripcion); setProy(porId[a.proyecto_id] || null); setAct(juntar(a)); setFact(a.facturable) }
   }
   useEffect(() => { if (email && proyectos.length) cargar().catch(e => toast('No se pudo cargar: ' + e.message, true)) }, [email, proyectos.length])
@@ -186,7 +120,12 @@ function Registrar({ email, proyectos, porId }) {
       )}
       {corriendo && <p className="ayuda" style={{ margin: '6px 0 0' }}>Corriendo desde las {hhmm(activo.inicio)} · {porId[activo.proyecto_id]?.nombre}</p>}
 
-      <div className="section-header" style={{ marginTop: 22 }}><span className="section-title">Últimos 14 días</span></div>
+      <div className="vista-trk" role="tablist">
+        {[['calendario', '📅 Calendario'], ['lista', '☰ Lista']].map(([k, t]) => <button key={k} className={vistaReg === k ? 'activa' : ''} onClick={() => cambiarVista(k)}>{t}</button>)}
+      </div>
+      {vistaReg === 'calendario' && <CalendarioTrack email={email} proyectos={proyectos} porId={porId} version={version} alCambiar={() => cronometroActivo(email).then(setActivo)} ultimo={{ proyecto: proy, actividad: act }} />}
+      {vistaReg === 'lista' && <>
+      <div className="section-header" style={{ marginTop: 16 }}><span className="section-title">Últimos 14 días</span></div>
       {porDia.length === 0 && <div className="vacio-chk">Todavía no tienes tiempo registrado aquí. Elige un proyecto y dale ▶ Iniciar.</div>}
       {porDia.map(([dia, rs]) => (
         <div key={dia} className="dia-trk">
@@ -209,6 +148,7 @@ function Registrar({ email, proyectos, porId }) {
             ))}
         </div>
       ))}
+      </>}
     </>
   )
 }
