@@ -17,7 +17,7 @@ import Dashboard from './pages/Dashboard'
 import Directorio from './pages/Directorio'
 import Proyecciones from './pages/Proyecciones'
 import ProyeccionesProyecto from './pages/ProyeccionesProyecto'
-import EnConstruccion from './pages/EnConstruccion'
+import Track from './pages/Track'
 import Checador from './pages/Checador'
 
 function PrivateRoute({ children }) {
@@ -53,7 +53,7 @@ export default function App() {
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/directorio" element={<PrivateRoute><Directorio /></PrivateRoute>} />
         <Route path="/checador" element={<PrivateRoute><Checador /></PrivateRoute>} />
-        <Route path="/track" element={<PrivateRoute><EnConstruccion titulo="Track" /></PrivateRoute>} />
+        <Route path="/track" element={<PrivateRoute><Track /></PrivateRoute>} />
         <Route path="/proyecciones" element={<PrivateRoute><Proyecciones /></PrivateRoute>} />
         <Route path="/projects/:id/proyecciones" element={<PrivateRoute><ProyeccionesProyecto /></PrivateRoute>} />
         <Route path="/projects/:id/aditivas" element={<PrivateRoute><Aditivas /></PrivateRoute>} />
