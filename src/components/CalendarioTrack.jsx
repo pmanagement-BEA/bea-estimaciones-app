@@ -148,30 +148,36 @@ export default function CalendarioTrack({ email, proyectos, porId, version, alCa
   function empezarNuevo(e, dia) {
     if (e.button !== 0 || e.target !== e.currentTarget) return
     const m = ajustar(Math.floor(minEn(e) / PASO) * PASO)
-    setArrastre({ tipo: 'nuevo', dia, ini: m, fin: m + PASO, origen: m })
+    const n = { tipo: 'nuevo', dia, ini: m, fin: m + PASO, origen: m }; arrRef.current = n; setArrastre(n)
   }
   function empezarBloque(e, b, dia) {
     if (e.button !== 0 || b.corriendo) return
     e.stopPropagation()
     const rect = e.currentTarget.getBoundingClientRect()
     const tipo = e.clientY > rect.bottom - 8 ? 'duracion' : 'mover'
-    setArrastre({ tipo, b, dia, diaDestino: dia, ini: b.ini, fin: b.fin, y0: e.clientY, movido: false })
+    const n = { tipo, b, dia, diaDestino: dia, ini: b.ini, fin: b.fin, y0: e.clientY, movido: false }; arrRef.current = n; setArrastre(n)
   }
+  // El estado del arrastre también vive en un ref: al soltar se calcula la posición final con ese mismo evento
+  const arrRef = useRef(null)
+  useEffect(() => { arrRef.current = arrastre }, [arrastre])
+  function calcular(a, e) {
+    if (a.tipo === 'nuevo') { const m = ajustar(minEn(e)); return m >= a.origen ? { ...a, ini: a.origen, fin: Math.max(a.origen + PASO, m) } : { ...a, ini: m, fin: a.origen + PASO } }
+    const dMin = Math.round(((e.clientY - a.y0) / pxM) / PASO) * PASO
+    const movido = a.movido || Math.abs(e.clientY - a.y0) > 4
+    if (a.tipo === 'duracion') return { ...a, movido, fin: Math.max(a.b.ini + PASO, Math.min(1440, a.b.fin + dMin)) }
+    const largo = a.b.fin - a.b.ini
+    const ini = Math.max(0, Math.min(1440 - largo, a.b.ini + dMin))
+    const dd = diaEn(e) || a.diaDestino
+    return { ...a, movido: movido || dd !== a.dia, ini, fin: ini + largo, diaDestino: dd }
+  }
+  const activoArrastre = !!arrastre
   useEffect(() => {
-    if (!arrastre) return
-    const mover = e => setArrastre(a => {
-      if (!a) return a
-      if (a.tipo === 'nuevo') { const m = ajustar(minEn(e)); return m >= a.origen ? { ...a, ini: a.origen, fin: Math.max(a.origen + PASO, m) } : { ...a, ini: m, fin: a.origen + PASO } }
-      const dMin = Math.round(((e.clientY - a.y0) / pxM) / PASO) * PASO
-      const movido = a.movido || Math.abs(e.clientY - a.y0) > 4
-      if (a.tipo === 'duracion') return { ...a, movido, fin: Math.max(a.b.ini + PASO, Math.min(1440, a.b.fin + dMin)) }
-      const largo = a.b.fin - a.b.ini
-      const ini = Math.max(0, Math.min(1440 - largo, a.b.ini + dMin))
-      const dd = diaEn(e) || a.diaDestino
-      return { ...a, movido: movido || dd !== a.dia, ini, fin: ini + largo, diaDestino: dd }
-    })
-    const soltar = async () => {
-      const a = arrastre
+    if (!activoArrastre) return
+    const mover = e => { if (!arrRef.current) return; const n = calcular(arrRef.current, e); arrRef.current = n; setArrastre(n) }
+    const soltar = async e => {
+      if (!arrRef.current) return
+      const a = calcular(arrRef.current, e)
+      arrRef.current = null
       setArrastre(null)
       if (a.tipo === 'nuevo') {
         setForm({ fecha: a.dia, desde: aHM(a.ini), hasta: a.fin >= 1440 ? '24:00' : aHM(a.fin), proyecto: ultimo?.proyecto || null, actividad: ultimo?.actividad || '' })
@@ -185,11 +191,10 @@ export default function CalendarioTrack({ email, proyectos, porId, version, alCa
       if (error) toast('No se pudo mover: ' + error.message, true)
       cargar(); alCambiar?.()
     }
-    // El último estado del arrastre se lee en soltar desde el closure de este efecto
     window.addEventListener('pointermove', mover)
-    window.addEventListener('pointerup', soltar, { once: true })
+    window.addEventListener('pointerup', soltar)
     return () => { window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar) }
-  }, [arrastre?.tipo, arrastre?.ini, arrastre?.fin, arrastre?.diaDestino, arrastre?.movido])
+  }, [activoArrastre])
 
   const semana = semanaIso(lunes)
   const pct = Math.round((totalSemana / (40 * H)) * 100)
