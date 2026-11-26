@@ -19,7 +19,7 @@ const NAV = [
   ['/dashboard', 'dashboard', 'Dashboard', p => p.startsWith('/dashboard')],
   ['/proyecciones', 'proyecciones', 'Proyecciones', p => p.startsWith('/proyecciones')],
   ['/checador', 'checador', 'Checador', p => p.startsWith('/checador')],
-  ['/track', 'track', 'Track', p => p.startsWith('/track'), true],
+  ['/track', 'track', 'Track', p => p.startsWith('/track')],
   ['/directorio', 'directorio', 'Directorio', p => p.startsWith('/directorio')],
 ]
 

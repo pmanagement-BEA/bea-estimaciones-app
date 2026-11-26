@@ -694,3 +694,72 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .sin-proy .nombre:hover{text-decoration:underline}
 .sin-proy .lider{color:var(--text-muted);font-size:12px}
 @media (max-width:600px){.sin-proy li{grid-template-columns:1fr auto}.sin-proy .lider{display:none}}
+
+/* ── Track (registro de tiempo) ── */
+.chip-trk{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:#EEF1F4;color:var(--text-muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;vertical-align:middle}
+.chip-trk.beta{background:var(--green-soft);color:var(--green-dark);font-size:11px}
+.timer-trk{display:grid;grid-template-columns:minmax(180px,1.4fr) minmax(200px,1.2fr) minmax(160px,1fr) auto auto auto auto;gap:10px;align-items:center;background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;position:relative}
+.timer-trk::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;border-radius:14px 0 0 14px;background:#CBD2D9}
+.timer-trk.corriendo::before{background:var(--green)}
+.timer-trk input,.timer-trk select,.manual-trk input,.reg-trk.editando input,.reg-trk.editando select,.filtros-trk input,.filtros-trk select{border:1px solid var(--border-strong);border-radius:8px;padding:8px 10px;background:#fff;min-width:0;width:100%}
+.timer-trk .desc{font-size:15px}
+.timer-trk .crono{font-size:24px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums;min-width:118px;text-align:right}
+.timer-trk .fact,.reg-trk .fact{display:flex;align-items:center;gap:4px;font-weight:700;color:var(--green-dark);cursor:pointer;white-space:nowrap}
+.timer-trk .fact input,.reg-trk .fact input{width:auto}
+.buscador-trk{position:relative;min-width:0}
+.opciones-trk{position:absolute;z-index:30;top:calc(100% + 4px);left:0;right:0;max-height:300px;overflow:auto;background:#fff;border:1px solid var(--border-strong);border-radius:10px;box-shadow:0 8px 24px rgba(13,27,42,.14);list-style:none;margin:0;padding:4px}
+.opciones-trk li{display:flex;justify-content:space-between;gap:10px;padding:7px 9px;border-radius:6px;cursor:pointer;font-size:13px}
+.opciones-trk li:hover,.opciones-trk li[aria-selected=true]{background:var(--green-soft)}
+.opciones-trk .nom{color:var(--navy);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.opciones-trk .cli{color:var(--text-muted);font-size:12px;white-space:nowrap}
+.opciones-trk .vacio{color:var(--text-muted);cursor:default}
+.manual-trk{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding:10px 14px;background:#F7F9FA;border:1px dashed var(--border-strong);border-radius:10px}
+.manual-trk input{width:auto}
+.manual-trk .dur{width:130px}
+.dia-trk{background:#fff;border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden}
+.dia-trk .cab{display:flex;justify-content:space-between;padding:8px 14px;background:#F7F9FA;border-bottom:1px solid var(--border);font-size:13px;color:var(--text-soft)}
+.reg-trk{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) 18px 100px 90px auto;gap:10px;align-items:center;padding:8px 14px;border-top:1px solid #F0F2F4;font-size:13px}
+.reg-trk:first-of-type{border-top:0}
+.reg-trk .d{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--navy)}
+.reg-trk .p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:12px}
+.reg-trk .f{color:var(--green-dark);font-weight:700}
+.reg-trk .h{color:var(--text-muted);font-variant-numeric:tabular-nums}
+.reg-trk .t{text-align:right;font-variant-numeric:tabular-nums}
+.reg-trk .acc{display:flex;gap:10px;justify-content:flex-end}
+.reg-trk.editando{grid-template-columns:minmax(0,1.4fr) minmax(0,1.3fr) minmax(0,1fr) auto auto auto auto auto auto;background:#FFFBEA}
+.btn-link-mini.rojo{color:var(--danger)}
+.filtros-trk{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:12px}
+.filtros-trk label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-soft)}
+.filtros-trk select,.filtros-trk input{width:auto}
+.filtros-trk > input{min-width:260px}
+.kpis-trk{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.barras-trk{display:flex;align-items:flex-end;gap:6px;height:170px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 12px 4px;overflow-x:auto}
+.barras-trk .col{flex:1 0 34px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:3px}
+.barras-trk .b{width:70%;background:var(--green);border-radius:4px 4px 0 0;min-height:2px}
+.barras-trk .v{font-size:10px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.barras-trk .m{font-size:10px;color:var(--text-soft);white-space:nowrap}
+.tabla-trk td.pn{max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--navy);font-weight:600}
+.tabla-trk tr.clic{cursor:pointer}
+.tabla-trk tr.clic:hover td{background:#F7F9FA}
+.tabla-trk tr.sub td{background:#FAFBFC}
+.tabla-trk .exc,.filtros-trk .exc{color:var(--danger)}
+.tabla-trk tfoot td{font-weight:700;border-top:2px solid var(--border)}
+.consumo-trk{position:relative;height:16px;background:#EEF1F4;border-radius:999px;overflow:hidden}
+.consumo-trk span{display:block;height:100%;background:var(--green)}
+.consumo-trk.alerta span{background:#F59E0B}
+.consumo-trk.exc span{background:var(--danger)}
+.consumo-trk b{position:absolute;right:6px;top:0;font-size:10px;line-height:16px;color:var(--navy)}
+.acts-trk{list-style:none;margin:0;padding:4px 0;columns:2;column-gap:28px;font-size:12px}
+.acts-trk li{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dotted var(--border);break-inside:avoid}
+.acts-trk li.inactiva{color:var(--text-muted)}
+@media (max-width:900px){
+  .timer-trk{grid-template-columns:1fr 1fr}
+  .timer-trk .desc{grid-column:1/-1}
+  .timer-trk .crono{text-align:left}
+  .kpis-trk{grid-template-columns:1fr 1fr}
+  .reg-trk{grid-template-columns:1fr auto;row-gap:2px}
+  .reg-trk .p{grid-column:1/-1;order:3}
+  .reg-trk .f,.reg-trk .h{display:none}
+  .reg-trk.editando{grid-template-columns:1fr 1fr}
+  .acts-trk{columns:1}
+}
