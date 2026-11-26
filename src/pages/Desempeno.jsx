@@ -318,7 +318,9 @@ function RepartoHorasLana({ r, g, tpSel, setTpSel, onAbrir }) {
     const x = tp?.project_id ? proyPorId.get(tp.project_id) : null
     const cobrado = x ? meses.reduce((a, m) => a + (x.cobradoPorMes[m] || 0), 0) : null
     const horasEquipo = x ? meses.reduce((a, m) => a + (x.horasPorMes[m] || 0), 0) : null
-    const porHora = cobrado > 0 && horasEquipo > 0 ? cobrado / horasEquipo : null
+    // $/h del proyecto con todo lo cobrado ÷ todas sus horas: lo cobrado antes de la migración entró como saldo al corte
+    // (no por mes), así que un $/h de solo el periodo saldría engañoso
+    const porHora = x?.porHora > 0 ? x.porHora : null
     return { id, tp, x, h, cobrado, horasEquipo, porHora, suParte: porHora != null ? porHora * h : null, moneda: x?.moneda || 'MXN' }
   }).filter(f => f.h > 0.05).sort((a, b) => b.h - a.h)
   if (!filas.length) return <p className="dsp-vacio">Sin horas registradas en el periodo.</p>
@@ -331,10 +333,10 @@ function RepartoHorasLana({ r, g, tpSel, setTpSel, onAbrir }) {
     <>
       <div className="dsp-chips">
         {[['mes', textoMes(r.mes)], ['12m', 'Últimos 12 meses']].map(([k, t]) => <button key={k} className={periodo === k ? 'activa' : ''} onClick={() => setPeriodo(k)}>{t}</button>)}
-        <span className="dsp-resumen-hl"><b>{hrs(totH, 1)}</b> en {filas.length} proyectos · <b>{dinero(totParte)}</b> de cobro le corresponde · {hrs(enIndirectos, 1)} en internos</span>
+        <span className="dsp-resumen-hl"><b>{hrs(totH, 1)}</b> en {filas.length} proyectos · <b>{dinero(totParte)}</b> de valor generado · {hrs(enIndirectos, 1)} en internos</span>
       </div>
       <div className="dsp-hl">
-        <div className="dsp-hl-cab"><span>Proyecto</span><span>Sus horas</span><span>Cobrado del proyecto</span><span title="Cobrado ÷ horas de todo el equipo en el periodo">$/h equipo</span><span title="$/h equipo × sus horas">Su parte</span></div>
+        <div className="dsp-hl-cab"><span>Proyecto</span><span>Sus horas</span><span>Cobrado en el periodo</span><span title="Todo lo cobrado del proyecto ÷ todas sus horas (Toggl + Track)">$/h proyecto</span><span title="$/h del proyecto × sus horas del periodo">Su parte</span></div>
         {visibles.map(f => (
           <Fragment key={f.id}>
             <div className={`dsp-hl-fila${tpSel === f.tp?.id ? ' abierta' : ''}`} onClick={() => f.tp && setTpSel(tpSel === f.tp.id ? null : f.tp.id)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && f.tp && setTpSel(tpSel === f.tp.id ? null : f.tp.id)}>
@@ -349,7 +351,7 @@ function RepartoHorasLana({ r, g, tpSel, setTpSel, onAbrir }) {
         ))}
       </div>
       {filas.length > 10 && <button className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={() => setTodos(!todos)}>{todos ? 'Ver menos' : `Ver los ${filas.length}`}</button>}
-      {periodo === 'mes' && r.mes === mesIso(new Date()) && <p className="dsp-nota">Mes en curso: lo de este mes se cobra al cierre; para comparar con dinero usa "Últimos 12 meses".</p>}
+      <p className="dsp-nota">Su parte = $/h del proyecto (todo lo cobrado ÷ todas sus horas) × sus horas del periodo. "Cobrado en el periodo" solo cuenta estimaciones capturadas por mes: lo cobrado antes de la migración entró como saldo al corte{periodo === 'mes' && r.mes === mesIso(new Date()) ? ', y el mes en curso se cobra al cierre' : ''}.</p>
     </>
   )
 }
