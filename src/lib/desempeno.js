@@ -97,6 +97,20 @@ export function calcularDesempeno(datos, hoy = new Date()) {
 
   // ── Proyectos de la app
   const lideres = responsables(projects, miembros, nombrePorEmail)
+  // Responsable de cada área en el proyecto (consultor/líder → Consultoría, cx → Commissioning, me → Modelación)
+  const ROL_AREA = { consultor: 'Consultoría', lider: 'Consultoría', cx: 'Commissioning', me: 'Modelación' }
+  const responsablesDe = pid => {
+    const out = {}
+    for (const m of miembros) {
+      if (m.project_id !== pid || !ROL_AREA[m.rol]) continue
+      const area = ROL_AREA[m.rol]
+      // En Consultoría manda el consultor; el líder solo si no hay consultor
+      if (m.rol === 'lider' && miembros.some(x => x.project_id === pid && x.rol === 'consultor')) continue
+      const e = lower(m.email)
+      ;(out[area] ||= []).includes(e) || out[area].push(e)
+    }
+    return Object.fromEntries(Object.entries(out).map(([a, es]) => [a, es.map(e => ({ email: e, nombre: nombreCorto(nombrePorEmail[e]) || e.split('@')[0] }))]))
+  }
   const proyPorProyecto = {}
   for (const f of proyecciones) (proyPorProyecto[f.project_id] ||= []).push(f)
   const atrasos = [], alertas = []
@@ -161,6 +175,7 @@ export function calcularDesempeno(datos, hoy = new Date()) {
     const proyectadoMes = proyectadoMeses[mes] || {}
     return {
       p, activo, moneda, lider: lideres[p.id] || '', avance, areaAvance: s.areaAvance,
+      responsablesArea: responsablesDe(p.id), cierre: p.end_date ? String(p.end_date).slice(0, 7) : null,
       conDescuento: s.totals.conDescuento, acumulado: s.acumGlobal, porEstimar,
       cobradoMeses, proyectadoMeses, cobradoMes, proyectadoMes,
       cobradoMesTotal: sumaArea(cobradoMes), proyectadoMesTotal: sumaArea(proyectadoMes),
