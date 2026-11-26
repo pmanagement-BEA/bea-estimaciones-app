@@ -73,8 +73,8 @@ export function calcularDesempeno(datos, hoy = new Date()) {
   function sumarHoras(email, nombre, tpId, m, h) {
     if (!(h > 0)) return
     const d = persona(email, nombre)
-    const clave = lower(d?.email || email) || 'n:' + norm(nombre)
-    const g = (gente[clave] ||= { clave, email: d?.email || email || '', nombre: d?.nombre || nombre || email, area: d?.area || null, activo: d ? d.activo !== false : true, meses: {} })
+    const clave = lower(d?.email || email) || 'n:' + (norm(nombre) || 'sin-identificar')
+    const g = (gente[clave] ||= { clave, email: d?.email || email || '', nombre: d?.nombre || nombre || email || 'Usuario de Toggl sin identificar', area: d?.area || null, activo: d ? d.activo !== false : true, meses: {} })
     const mm = (g.meses[m] ||= { total: 0, indirectas: 0, porProyecto: {} })
     const tp = tpPorId.get(String(tpId))
     mm.total += h
@@ -129,15 +129,15 @@ export function calcularDesempeno(datos, hoy = new Date()) {
 
     const activo = p.status === 'Activo'
     if (activo) {
-      // Atrasos: lo proyectado en meses que ya pasaron y que todavía no se cobra
-      for (const f of filas) {
-        if (f.mes >= mesHoy || !f.concept_id) continue
+      // Atrasos: conceptos cuya última proyección quedó en un mes que ya pasó y siguen sin cobrarse
+      // (si se reprogramaron a un mes futuro ya no cuentan como atraso)
+      const ultima = new Map()
+      for (const f of filas) if (f.concept_id && (!ultima.has(f.concept_id) || f.mes > ultima.get(f.concept_id).mes)) ultima.set(f.concept_id, f)
+      for (const f of ultima.values()) {
+        if (f.mes >= mesHoy) continue
         const pend = pendienteId.get(f.concept_id)
-        const cobradoEseMes = cobradoConcepto[f.mes]?.[f.concept_id] || 0
-        if (pend && cobradoEseMes < 0.5) {
-          const c = conceptoId.get(f.concept_id)
-          atrasos.push({ proyecto: p, moneda, mes: f.mes, area: f.area, concepto: c, monto: +f.monto || 0, porEstimar: pend.porEstimar, meses: (+mesHoy.slice(0, 4) - +f.mes.slice(0, 4)) * 12 + (+mesHoy.slice(5) - +f.mes.slice(5)) })
-        }
+        if (!pend) continue
+        atrasos.push({ proyecto: p, moneda, mes: f.mes, area: f.area, concepto: conceptoId.get(f.concept_id), monto: +f.monto || 0, sinMonto: !(+f.monto > 0), porEstimar: pend.porEstimar, meses: (+mesHoy.slice(0, 4) - +f.mes.slice(0, 4)) * 12 + (+mesHoy.slice(5) - +f.mes.slice(5)) })
       }
       // Calidad de captura
       for (const e of estimations) {
@@ -211,7 +211,7 @@ export function calcularDesempeno(datos, hoy = new Date()) {
       area, cobrado, proyectado, acumulado, contratado, personas: gentes, horas, indirectas,
       cumplimiento: (proyectado.MXN || 0) > 0 ? (cobrado.MXN || 0) / proyectado.MXN * 100 : null,
       avance: (contratado.MXN || 0) > 0 ? (acumulado.MXN || 0) / contratado.MXN * 100 : null,
-      utilizacion: capacidad > 0 && gentes.some(g => g.activo) ? horas / (gentes.filter(g => g.activo).length * capacidad) * 100 : 0,
+      utilizacion: capacidad > 0 && gentes.some(g => g.activo || g.horas > 0) ? horas / (gentes.filter(g => g.activo || g.horas > 0).length * capacidad) * 100 : 0,
       porHora: horas > 0 ? (cobrado.MXN || 0) / horas : null,
       proyectos: activos.filter(x => x.areaAvance?.[area] || x.cobradoMes[area] || x.proyectadoMes[area]),
       atrasos: atrasos.filter(a => a.area === area),
@@ -239,7 +239,7 @@ export function calcularDesempeno(datos, hoy = new Date()) {
   const horas = personas.reduce((a, g) => a + g.horas, 0)
   const indirectas = personas.reduce((a, g) => a + g.indirectas, 0)
   // Capacidad: gente de las áreas operativas o que registró horas en el mes (Dirección sin horas no cuenta)
-  const conHoras = personas.filter(g => g.activo && (AREAS.includes(g.area) || g.horas > 0))
+  const conHoras = personas.filter(g => (g.activo && AREAS.includes(g.area)) || g.horas > 0)
   const totales = {
     cobrado, proyectado, porEstimar, contratado, acumulado, horas, indirectas, habiles, capacidad,
     cumplimiento: (proyectado.MXN || 0) > 0 ? (cobrado.MXN || 0) / proyectado.MXN * 100 : null,
