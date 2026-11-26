@@ -81,7 +81,7 @@ export default function History() {
           <div className="page-subtitle">{project.name} · {project.client}</div>
         </div>
         <div className="flex" style={{ flexWrap: 'wrap', gap: 8 }}>
-          <button className="btn btn-primary" onClick={() => navigate(`/projects/${id}/estimations/current`)}>
+          <button className="btn btn-primary" onClick={() => navigate(`/projects/${id}/estimations/current?crear=1`)}>
             + Nueva / Borrador actual
           </button>
           <button className="btn btn-outline" onClick={() => navigate(`/projects/${id}/setup`)}>⚙ Configuración</button>
