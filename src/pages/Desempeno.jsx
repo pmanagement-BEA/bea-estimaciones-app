@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fmtMoney } from '../utils/format'
 import { puedeVerDesempeno, cargarDesempeno, calcularDesempeno, AREAS } from '../lib/desempeno'
@@ -302,6 +302,59 @@ function VistaArea({ r, area, onAbrir, onPersona }) {
   )
 }
 
+
+/** Horas de la persona contra el dinero de cada proyecto, lado a lado; el desglose se abre debajo de la fila. */
+function RepartoHorasLana({ r, g, tpSel, setTpSel, onAbrir }) {
+  const [periodo, setPeriodo] = useState('mes')
+  const [todos, setTodos] = useState(false)
+  const meses = periodo === 'mes' ? [r.mes] : r.meses
+  const porTp = {}
+  for (const m of meses) for (const [id, h] of Object.entries(g.meses[m]?.porProyecto || {})) porTp[id] = (porTp[id] || 0) + h
+  const proyPorId = new Map(r.todos.map(x => [x.p.id, x]))
+  const datos = useContext(DatosDesempeno)
+  const tpPorId = new Map((datos?.tps || []).map(t => [String(t.id), t]))
+  const filas = Object.entries(porTp).map(([id, h]) => {
+    const tp = tpPorId.get(String(id))
+    const x = tp?.project_id ? proyPorId.get(tp.project_id) : null
+    const cobrado = x ? meses.reduce((a, m) => a + (x.cobradoPorMes[m] || 0), 0) : null
+    const horasEquipo = x ? meses.reduce((a, m) => a + (x.horasPorMes[m] || 0), 0) : null
+    const porHora = cobrado > 0 && horasEquipo > 0 ? cobrado / horasEquipo : null
+    return { id, tp, x, h, cobrado, horasEquipo, porHora, suParte: porHora != null ? porHora * h : null, moneda: x?.moneda || 'MXN' }
+  }).filter(f => f.h > 0.05).sort((a, b) => b.h - a.h)
+  if (!filas.length) return <p className="dsp-vacio">Sin horas registradas en el periodo.</p>
+  const maxH = filas[0].h, maxL = Math.max(1, ...filas.map(f => f.cobrado || 0))
+  const totH = filas.reduce((a, f) => a + f.h, 0)
+  const totParte = filas.reduce((a, f) => a + (f.moneda === 'MXN' ? f.suParte || 0 : 0), 0)
+  const enIndirectos = filas.filter(f => !f.x).reduce((a, f) => a + f.h, 0)
+  const visibles = todos ? filas : filas.slice(0, 10)
+  return (
+    <>
+      <div className="dsp-chips">
+        {[['mes', textoMes(r.mes)], ['12m', 'Últimos 12 meses']].map(([k, t]) => <button key={k} className={periodo === k ? 'activa' : ''} onClick={() => setPeriodo(k)}>{t}</button>)}
+        <span className="dsp-resumen-hl"><b>{hrs(totH, 1)}</b> en {filas.length} proyectos · <b>{dinero(totParte)}</b> de cobro le corresponde · {hrs(enIndirectos, 1)} en internos</span>
+      </div>
+      <div className="dsp-hl">
+        <div className="dsp-hl-cab"><span>Proyecto</span><span>Sus horas</span><span>Cobrado del proyecto</span><span title="Cobrado ÷ horas de todo el equipo en el periodo">$/h equipo</span><span title="$/h equipo × sus horas">Su parte</span></div>
+        {visibles.map(f => (
+          <Fragment key={f.id}>
+            <div className={`dsp-hl-fila${tpSel === f.tp?.id ? ' abierta' : ''}`} onClick={() => f.tp && setTpSel(tpSel === f.tp.id ? null : f.tp.id)} role="button" tabIndex={0} onKeyDown={e => e.key === 'Enter' && f.tp && setTpSel(tpSel === f.tp.id ? null : f.tp.id)}>
+              <span className="nombre"><span className="dsp-chev">{tpSel === f.tp?.id ? '▾' : '▸'}</span>{f.tp?.nombre || 'Proyecto'}</span>
+              <span className="barra-h"><i style={{ width: `${f.h / maxH * 100}%` }} /><em>{hrs(f.h, 1)}</em></span>
+              <span className="barra-l">{f.x ? <><i style={{ width: `${(f.cobrado || 0) / maxL * 100}%` }} /><em>{f.cobrado > 0.5 ? dinero(f.cobrado, f.moneda) : '$0'}</em></> : <em className="sub">{esInterno(f.tp) ? 'interno' : 'sin ligar'}</em>}</span>
+              <span className="n">{f.porHora != null ? dinero(f.porHora, f.moneda) : '—'}</span>
+              <span className="n fuerte">{f.suParte != null ? dinero(f.suParte, f.moneda) : '—'}</span>
+            </div>
+            {tpSel === f.tp?.id && <div className="dsp-hl-detalle"><ProyectoDetalle key={tpSel} tpId={tpSel} email={g.email} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} pestanaInicial="actividades" /></div>}
+          </Fragment>
+        ))}
+      </div>
+      {filas.length > 10 && <button className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={() => setTodos(!todos)}>{todos ? 'Ver menos' : `Ver los ${filas.length}`}</button>}
+      {periodo === 'mes' && r.mes === mesIso(new Date()) && <p className="dsp-nota">Mes en curso: lo de este mes se cobra al cierre; para comparar con dinero usa "Últimos 12 meses".</p>}
+    </>
+  )
+}
+const esInterno = tp => /^0\d\d/.test(tp?.nombre || '')
+
 function VistaIndividual({ r, clave, onAbrir }) {
   const [tpSel, setTpSel] = useState(null)
   useEffect(() => { setTpSel(null) }, [clave])
@@ -325,19 +378,10 @@ function VistaIndividual({ r, clave, onAbrir }) {
         <Kpi etiqueta="Cumplimiento" valor={pct(cumplimiento)} sub="de los proyectos que lidera" tono={semaforo(cumplimiento, 95, 60)} />
         <Kpi etiqueta="Atrasos" valor={atrasos.length} sub="en proyectos que lidera" tono={atrasos.length ? 'mal' : 'ok'} />
       </div>
-      <div className="dsp-dos">
-        <Seccion titulo="Horas por mes" sub="últimos 12 meses"><GraficaHoras tendencia={tendencia} /><Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} /></Seccion>
-        <Seccion titulo="Dónde se fueron las horas" sub={textoMes(r.mes)}>
-          {g.porProyecto.length ? (
-            <ul className="dsp-reparto">
-              {g.porProyecto.slice(0, 12).map((x, i) => (
-                <li key={i} className={`dsp-clic${tpSel === x.tp?.id ? ' activo' : ''}`} onClick={() => x.tp && setTpSel(tpSel === x.tp.id ? null : x.tp.id)} title="Ver desglose por concepto e indicadores"><span className="nombre"><span className="dsp-chev">{tpSel === x.tp?.id ? '▾' : '▸'}</span>{x.tp?.nombre || 'Proyecto'}</span><Barra valor={x.h} max={g.porProyecto[0].h} /><span className="n">{hrs(x.h, 1)}</span></li>
-              ))}
-            </ul>
-          ) : <p className="dsp-vacio">Sin horas registradas en el mes.</p>}
-        </Seccion>
-      </div>
-      {tpSel && <Seccion titulo="Desglose del proyecto" sub="indicadores H-H y concepto por concepto"><ProyectoDetalle key={tpSel} tpId={tpSel} email={g.email} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} /></Seccion>}
+      <Seccion titulo="Horas por mes" sub="últimos 12 meses"><GraficaHoras tendencia={tendencia} /><Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} /></Seccion>
+      <Seccion titulo="Dónde se fueron las horas" sub="sus horas contra lo que cobra cada proyecto · pícale a uno para ver actividad por actividad">
+        <RepartoHorasLana r={r} g={g} tpSel={tpSel} setTpSel={setTpSel} onAbrir={onAbrir} />
+      </Seccion>
       <Seccion titulo="Proyectos que lidera"><TablaProyectos filas={lider} onAbrir={onAbrir} /></Seccion>
       <Seccion titulo="Atrasos en sus proyectos"><TablaAtrasos atrasos={atrasos} onAbrir={onAbrir} /></Seccion>
     </>

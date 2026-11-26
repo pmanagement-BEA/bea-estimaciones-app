@@ -3,7 +3,7 @@
 // los conceptos. Abajo, pestañas: Conceptos · Actividades de Toggl · Equipo.
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { fmtMoney } from '../utils/format'
-import { detalleProyecto, cargarActividadesHoras } from '../lib/desempenoDetalle'
+import { detalleProyecto, cargarActividadesHoras, nombresActividades } from '../lib/desempenoDetalle'
 import { COLOR_AREA, textoMes, nombreCorto } from '../lib/proyecciones'
 import { num } from '../lib/track'
 
@@ -42,16 +42,24 @@ function Dato({ etiqueta, valor, nota, tono: t }) {
   return <div className={`dsp-dato ${t || ''}`}><span>{etiqueta}</span><b>{valor}</b>{nota && <small>{nota}</small>}</div>
 }
 
-export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar }) {
+export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar, pestanaInicial = 'conceptos' }) {
   const datos = useContext(DatosDesempeno)
   const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId, projectId, email }) : null), [datos, tpId, projectId, email])
   const [areaSel, setAreaSel] = useState(null)
-  const [pestana, setPestana] = useState('conceptos')
+  const [pestana, setPestana] = useState(pestanaInicial)
+  const [nombres, setNombres] = useState({})
   const [filtro, setFiltro] = useState('pendientes')
   const [actividades, setActividades] = useState(null)
   const ids = d?.tpIds.join(',')
+  const idsAct = (d?.enTrack || []).filter(x => x.actividadId).map(x => String(x.actividadId)).join(',')
   useEffect(() => {
-    if (pestana !== 'toggl' || actividades) return
+    if (!idsAct) return
+    let vivo = true
+    nombresActividades(idsAct.split(',')).then(n => { if (vivo) setNombres(n) })
+    return () => { vivo = false }
+  }, [idsAct])
+  useEffect(() => {
+    if (pestana !== 'actividades' || actividades) return
     let vivo = true
     cargarActividadesHoras(ids ? ids.split(',') : []).then(a => { if (vivo) setActividades(a) })
     return () => { vivo = false }
@@ -110,7 +118,7 @@ export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar }) {
 
       {/* Pestañas */}
       <div className="dsp-pestanas no-print" role="tablist">
-        {[['conceptos', `Conceptos${areaSel ? ' · ' + ETQ[areaSel] : ''}`], ['toggl', 'Actividades de Toggl'], ['equipo', `Equipo (${d.personas.length})`]].map(([k, t]) => (
+        {[['conceptos', `Conceptos${areaSel ? ' · ' + ETQ[areaSel] : ''}`], ['actividades', 'Actividad por actividad'], ['equipo', `Equipo (${d.personas.length})`]].map(([k, t]) => (
           <button key={k} role="tab" aria-selected={pestana === k} className={pestana === k ? 'activa' : ''} onClick={() => setPestana(k)}>{t}</button>
         ))}
       </div>
@@ -150,14 +158,33 @@ export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar }) {
         </>
       )}
 
-      {pestana === 'toggl' && (
-        actividades === null ? <p className="dsp-vacio">Cargando…</p> : actividades.length ? (
-          <ul className="dsp-reparto">
-            {actividades.slice(0, 15).map(x => (
-              <li key={x.id}><span className="nombre" title={x.nombre}>{x.nombre}</span><span className="dsp-barra"><span style={{ width: `${(+x.horas_toggl) / maxAct * 100}%`, background: 'var(--green)' }} /></span><span className="n">{hrs(+x.horas_toggl, 1)}</span></li>
-            ))}
-          </ul>
-        ) : <p className="dsp-vacio">Sin actividades con horas en Toggl.</p>
+      {pestana === 'actividades' && (
+        <div className="dsp-act">
+          <h5>{email ? 'Lo que registró en Track' : 'Registrado en Track'} <span className="sub">desde que arrancó Track</span></h5>
+          {d.enTrack.length ? (
+            <ul className="dsp-reparto">
+              {d.enTrack.map(x => {
+                const c = x.conceptoId ? d.conceptos.find(k => k.id === x.conceptoId) : null
+                const nombre = c ? `${c.key} ${c.descripcion}` : x.actividadId ? nombres[String(x.actividadId)] || 'Actividad' : x.descripcion || 'Sin descripción'
+                return (
+                  <li key={x.k}>
+                    <span className="nombre" title={nombre}>{c && <span className="dsp-tag-c">concepto</span>}{nombre}</span>
+                    <span className="dsp-barra"><span style={{ width: `${x.horas / d.enTrack[0].horas * 100}%`, background: c ? 'var(--green)' : '#8a97a8' }} /></span>
+                    <span className="n">{hrs(x.horas, 1)}</span>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : <p className="dsp-vacio">Aún no hay registros en Track para este proyecto{email ? ' de esta persona' : ''}.</p>}
+          <h5>Histórico de Toggl <span className="sub">todo el equipo, hasta el 26 nov 2026</span></h5>
+          {actividades === null ? <p className="dsp-vacio">Cargando…</p> : actividades.length ? (
+            <ul className="dsp-reparto">
+              {actividades.slice(0, 15).map(x => (
+                <li key={x.id}><span className="nombre" title={x.nombre}>{x.nombre}</span><span className="dsp-barra"><span style={{ width: `${(+x.horas_toggl) / maxAct * 100}%`, background: 'var(--green)' }} /></span><span className="n">{hrs(+x.horas_toggl, 1)}</span></li>
+              ))}
+            </ul>
+          ) : <p className="dsp-vacio">Sin actividades con horas en Toggl.</p>}
+        </div>
       )}
 
       {pestana === 'equipo' && (

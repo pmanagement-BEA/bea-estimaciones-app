@@ -979,3 +979,25 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .dsp-equipo small{color:var(--text-muted);font-weight:400}
 @media (max-width:700px){ .dsp-lista-c li{grid-template-columns:44px 1fr 90px} .dsp-lista-c .hh,.dsp-lista-c .real{display:none} }
 @media print{ .dsp-lista-c{max-height:none;overflow:visible} .dsp-area{break-inside:avoid} }
+/* Dónde se fueron las horas: horas vs dinero lado a lado */
+.dsp-resumen-hl{margin-left:auto;font-size:12px;color:var(--text-soft)}
+.dsp-hl{display:flex;flex-direction:column}
+.dsp-hl-cab,.dsp-hl-fila{display:grid;grid-template-columns:minmax(180px,1.6fr) 1fr 1fr 80px 90px;gap:12px;align-items:center}
+.dsp-hl-cab{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);padding:4px 6px;border-bottom:1px solid var(--border)}
+.dsp-hl-cab span:nth-child(n+4){text-align:right}
+.dsp-hl-fila{padding:6px;border-radius:8px;cursor:pointer;font-size:13px;transition:background .12s}
+.dsp-hl-fila:hover,.dsp-hl-fila.abierta{background:var(--panel)}
+.dsp-hl-fila:focus-visible{outline:2px solid var(--green)}
+.dsp-hl-fila .nombre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsp-hl-fila .barra-h,.dsp-hl-fila .barra-l{position:relative;height:18px;display:flex;align-items:center}
+.dsp-hl-fila .barra-h i,.dsp-hl-fila .barra-l i{position:absolute;left:0;top:3px;bottom:3px;border-radius:4px;transition:width .35s ease;min-width:2px}
+.dsp-hl-fila .barra-h i{background:#2a78d6;opacity:.85}
+.dsp-hl-fila .barra-l i{background:var(--green);opacity:.85}
+.dsp-hl-fila em{position:relative;font-style:normal;font-size:12px;font-variant-numeric:tabular-nums;padding-left:6px;font-weight:600;color:var(--text);text-shadow:0 0 3px var(--card)}
+.dsp-hl-fila em.sub{font-weight:400;color:var(--text-muted);text-shadow:none;padding-left:0}
+.dsp-hl-fila .n{text-align:right;font-variant-numeric:tabular-nums}
+.dsp-hl-fila .fuerte{font-weight:700}
+.dsp-hl-detalle{padding:2px 0 10px}
+.dsp-act h5{font-size:12px;margin:10px 0 4px;color:var(--text)}
+.dsp-tag-c{font-size:9.5px;background:var(--green-soft);color:var(--green-dark);border-radius:99px;padding:0 6px;margin-right:6px;font-weight:700;text-transform:uppercase}
+@media (max-width:760px){ .dsp-hl-cab,.dsp-hl-fila{grid-template-columns:1fr 90px 90px} .dsp-hl-cab span:nth-child(n+4),.dsp-hl-fila .n{display:none} .dsp-resumen-hl{margin-left:0;width:100%} }
