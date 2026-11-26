@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
@@ -58,6 +58,7 @@ function monthOptions(mes, startDate, endDate) {
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Estimation() {
   const { id, estId } = useParams()
+  const [searchParams] = useSearchParams()
   const { profile } = useAuth()
   const navigate = useNavigate()
 
@@ -88,7 +89,7 @@ export default function Estimation() {
   // Guardado de conceptos: un temporizador por concepto (antes era uno solo y se perdían cambios)
   const saveTimers      = useRef({})
   const pendientes      = useRef({}) // { concept_id: item } aún sin guardar
-  const [proyectados, setProyectados] = useState({ ids: new Set(), lista: [], libres: new Set() })
+  const [proyectados, setProyectados] = useState({ ids: new Set(), lista: [], libres: new Set(), pendientes: new Set() })
   const reportSaveTimer = useRef(null)
   const reportInsert    = useRef(null)
   const reportRef       = useRef(null)
@@ -125,6 +126,13 @@ export default function Estimation() {
         // El borrador quedó encimado con un periodo ya enviado: pasa al periodo en turno (si el líder eligió otro a mano, se respeta)
         await supabase.from('estimations').update(periodo).eq('id', est.id)
         est = { ...est, ...periodo }
+      }
+      if (!est && projRes.data.status !== 'Activo' && searchParams.get('crear') !== '1') {
+        // Abrir un proyecto inactivo o pausado no debe dejar borradores vacíos: se crea solo a propósito desde el Historial
+        toast(`El proyecto está ${(projRes.data.status || 'sin estado').toLowerCase()} y no tiene borrador. Si sí toca estimar, créalo con "+ Nueva / Borrador actual".`)
+        setLoading(false)
+        navigate(`/projects/${id}/history`, { replace: true })
+        return
       }
       if (!est) {
         // Crear borrador del mes en turno
@@ -168,16 +176,19 @@ export default function Estimation() {
     }
 
     // Proyecciones del mes: se sugieren (etiqueta "Proyectado" y botón para marcarlas); nada se marca solo
-    let infoProyectados = { ids: new Set(), lista: [], libres: new Set() }
+    let infoProyectados = { ids: new Set(), lista: [], libres: new Set(), pendientes: new Set() }
     if (est.status === 'Borrador') {
       const mesEst = mesDelPeriodo(est.period_from, est.period_to)
       const { data: prs } = await supabase.from('proyecciones').select('id, concept_id, area, descripcion, monto, tbd').eq('project_id', id).eq('mes', mesEst)
       if (prs?.length) {
         // "Libres": conceptos que no se han cobrado nada (se pueden marcar completos)
-        const libres = new Set(conceptosPorEstimar(projRes.data, discs, allEsts.filter(e => e.id !== est.id)).filter(x => x.porEstimar >= x.monto - 0.5).map(x => x.concept.id))
+        const porEstimar = conceptosPorEstimar(projRes.data, discs, allEsts.filter(e => e.id !== est.id))
+        const libres = new Set(porEstimar.filter(x => x.porEstimar >= x.monto - 0.5).map(x => x.concept.id))
+        // "Pendientes": conceptos a los que aún les falta algo por cobrar (los demás ya se cobraron completos)
+        const pendientes = new Set(porEstimar.map(x => x.concept.id))
         const orden = new Map(discs.flatMap(d => d.concepts.map(c => c.id)).map((cid, i) => [cid, i]))
         const lista = [...prs].sort((a, b) => (orden.get(a.concept_id) ?? 1e6) - (orden.get(b.concept_id) ?? 1e6))
-        infoProyectados = { ids: new Set(prs.map(x => x.concept_id).filter(Boolean)), lista, libres }
+        infoProyectados = { ids: new Set(prs.map(x => x.concept_id).filter(Boolean)), lista, libres, pendientes }
       }
     }
     setProyectados(infoProyectados)
@@ -537,6 +548,13 @@ export default function Estimation() {
   }
 
   const estNumLabel = `#${String(estimation.number).padStart(3, '0')}`
+  // Candados: una estimación en $0 no debe enviarse por descuido, y el borrador no debe ir adelantado al mes actual
+  const nombreMes = ym => { const [y, m] = (ym || '').split('-').map(Number); return y ? new Date(y, m - 1, 1).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }) : '' }
+  const mesBorrador = estimation.status === 'Borrador' ? mesDelPeriodo(estimation.period_from, estimation.period_to) : ''
+  const mesHoy = fechaLocal(new Date()).slice(0, 7)
+  const borradorAdelantado = !!mesBorrador && mesBorrador > mesHoy
+  const avisoEnvioVacio = currentTotal > 0.005 ? '' :
+    `<p style="color:var(--danger);margin-bottom:8px"><strong>Esta estimación no tiene ningún concepto cobrado ($0).</strong> Si la envías, el mes queda cerrado en ceros y el siguiente borrador pasa al mes que sigue. Envíala vacía solo si de verdad no se cobra nada este mes.</p>`
   const monthOpts = monthOptions(mesDelPeriodo(estimation.period_from, estimation.period_to), project.start_date, project.end_date)
 
   return (
@@ -571,7 +589,7 @@ export default function Estimation() {
             <button className="btn btn-outline" onClick={async () => { await guardarPendientes(); toast('Borrador guardado ✓') }}>Guardar borrador</button>
             {perms.todo && <button className="btn btn-primary" onClick={() => setModal({
               title: '✉ Marcar Estimación como Enviada',
-              body: (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
+              body: avisoEnvioVacio + (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
                 '<p>Una vez marcada como <strong>Enviada</strong>, la estimación no podrá editarse.</p><p style="margin-top:8px;color:var(--text-muted)">¿Confirmas que deseas marcarla como Enviada?</p>',
               onConfirm: markSent,
             })}>Marcar como Enviada</button>}
@@ -669,6 +687,15 @@ export default function Estimation() {
             </div>
           </div>
 
+          {borradorAdelantado && (
+            <div className="card mb-md no-print" style={{ borderLeft: '4px solid var(--danger)', padding: '10px 16px', fontSize: 13 }}>
+              <strong>Este borrador es de {nombreMes(mesBorrador)}, pero el mes en curso es {nombreMes(mesHoy)}.</strong>{' '}
+              Lo proyectado que ves abajo es de ese mes posterior. Revisa en el{' '}
+              <button className="btn-link-mini" onClick={() => navigate(`/projects/${id}/history`)}>Historial</button>{' '}
+              si una estimación anterior quedó enviada vacía.
+            </div>
+          )}
+
           {/* Lo proyectado para este mes: lista compacta con su estado y botón para marcar */}
           {estimation.status === 'Borrador' && proyectados.lista.length > 0 && (() => {
             const faltan = porMarcar()
@@ -677,6 +704,7 @@ export default function Estimation() {
             const estado = p => {
               if (!p.concept_id) return ['Sin concepto ligado', 'var(--text-soft)']
               if (items[p.concept_id]?.included) return ['✓ Marcado', 'var(--green-dark)']
+              if (!proyectados.pendientes.has(p.concept_id)) return ['Ya cobrado', 'var(--text-soft)']
               if (!proyectados.libres.has(p.concept_id)) return ['Ya se cobró una parte', 'var(--warning)']
               return ['Por marcar', 'var(--text-muted)']
             }
@@ -1003,7 +1031,7 @@ export default function Estimation() {
               {estimation.status === 'Borrador' && perms.todo && (
                 <button className="btn btn-primary" onClick={() => setModal({
                   title: '✉ Marcar Estimación como Enviada',
-                  body: (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
+                  body: avisoEnvioVacio + (areasPendientes.length ? `<p style="color:var(--danger)"><strong>Ojo:</strong> faltan por marcar como listas: ${areasPendientes.join(', ')}.</p>` : '') +
                     '<p>Una vez marcada como <strong>Enviada</strong>, la estimación no podrá editarse.</p>',
                   onConfirm: markSent,
                 })}>Marcar como Enviada</button>
