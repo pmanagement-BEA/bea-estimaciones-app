@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { cargarActividades, cargarConceptos } from '../lib/track'
 
 export const sinAcentos = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -38,15 +39,31 @@ export function BuscadorProyecto({ proyectos, valor, alElegir, placeholder = 'Pr
   )
 }
 
-/** Actividades de Toggl del proyecto + conceptos de su estimación (si está ligado a la app). */
+// Actividades que existen en (casi) todos los proyectos de Toggl: se ofrecen siempre
+export const GENERALES = [
+  'CT-00-01 Administración/Comercial: Reunión',
+  'CT-00-02 Reporte Mensual y Estimación',
+  'CT-00-03 Traslados',
+  'Administración',
+]
+const limpio = n => (n || '').replace(/^#\d+\s*/, '').trim()
+
+/** Conceptos de la estimación (si el proyecto está ligado a la app) + actividades generales + actividades de Toggl del proyecto. */
 export function useOpciones(proyecto) {
-  const [ops, setOps] = useState({ actividades: [], conceptos: [] })
+  const [ops, setOps] = useState({ actividades: [], conceptos: [], generales: [] })
   useEffect(() => {
-    if (!proyecto) { setOps({ actividades: [], conceptos: [] }); return }
+    if (!proyecto) { setOps({ actividades: [], conceptos: [], generales: [] }); return }
     let vivo = true
     Promise.all([cargarActividades(proyecto.id), cargarConceptos(proyecto.project_id)])
-      .then(([a, c]) => vivo && setOps({ actividades: a.filter(x => x.activo), conceptos: c }))
-      .catch(() => vivo && setOps({ actividades: [], conceptos: [] }))
+      .then(([a, c]) => {
+        if (!vivo) return
+        // Una general que ya existe en el proyecto usa su id; si no, se crea al guardar
+        const porNombre = new Map(a.map(x => [limpio(x.nombre), x]))
+        const generales = GENERALES.map(n => porNombre.get(n) ? { valor: `a:${porNombre.get(n).id}`, nombre: n } : { valor: `g:${n}`, nombre: n })
+        const usadas = new Set(generales.filter(g => g.valor.startsWith('a:')).map(g => g.valor))
+        setOps({ conceptos: c, generales, actividades: a.filter(x => x.activo && !usadas.has(`a:${x.id}`)) })
+      })
+      .catch(() => vivo && setOps({ actividades: [], conceptos: [], generales: [] }))
     return () => { vivo = false }
   }, [proyecto?.id])
   return ops
@@ -54,16 +71,21 @@ export function useOpciones(proyecto) {
 
 export function SelectorActividad({ ops, valor, alCambiar }) {
   return (
-    <select value={valor} onChange={e => alCambiar(e.target.value)} aria-label="Actividad">
-      <option value="">— Actividad (opcional) —</option>
+    <select value={valor} onChange={e => alCambiar(e.target.value)} aria-label="Concepto o actividad">
+      <option value="">— Concepto o actividad —</option>
       {ops.conceptos.length > 0 && (
         <optgroup label="Conceptos de la estimación">
           {ops.conceptos.map(c => <option key={c.id} value={`c:${c.id}`}>{c.key} {c.description}</option>)}
         </optgroup>
       )}
+      {ops.generales?.length > 0 && (
+        <optgroup label="Actividades generales">
+          {ops.generales.map(g => <option key={g.valor} value={g.valor}>{g.nombre}</option>)}
+        </optgroup>
+      )}
       {ops.actividades.length > 0 && (
-        <optgroup label="Actividades (Toggl)">
-          {ops.actividades.map(a => <option key={a.id} value={`a:${a.id}`}>{a.nombre}</option>)}
+        <optgroup label="Otras actividades del proyecto (Toggl)">
+          {ops.actividades.map(a => <option key={a.id} value={`a:${a.id}`}>{limpio(a.nombre)}</option>)}
         </optgroup>
       )}
     </select>
@@ -72,3 +94,13 @@ export function SelectorActividad({ ops, valor, alCambiar }) {
 export const partir = v => ({ actividad_id: v?.startsWith('a:') ? +v.slice(2) : null, concepto_id: v?.startsWith('c:') ? v.slice(2) : null })
 export const juntar = r => (r.concepto_id ? `c:${r.concepto_id}` : r.actividad_id ? `a:${r.actividad_id}` : '')
 
+/** Convierte la opción elegida en columnas; una actividad general que el proyecto no tenía se da de alta. */
+export async function resolverActividad(valor, proyectoId) {
+  if (!valor?.startsWith('g:')) return partir(valor)
+  const nombre = valor.slice(2)
+  const { data: ya } = await supabase.from('track_actividades').select('id').eq('proyecto_id', proyectoId).eq('nombre', nombre).limit(1)
+  if (ya?.length) return { actividad_id: ya[0].id, concepto_id: null }
+  const { data, error } = await supabase.from('track_actividades').insert({ proyecto_id: proyectoId, nombre, origen: 'app' }).select('id').single()
+  if (error) throw error
+  return { actividad_id: data.id, concepto_id: null }
+}
