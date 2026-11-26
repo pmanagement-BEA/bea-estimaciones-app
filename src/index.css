@@ -907,3 +907,23 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
   .dsp-tabla-wrap{overflow:visible}
   .dsp-kpi.ok,.dsp-kpi.medio,.dsp-kpi.mal{border-left-width:3px!important}
 }
+
+/* Desempeño: desglose por proyecto */
+.dsp-fila{cursor:pointer}
+.dsp-fila:hover td,.dsp-fila.abierta td{background:var(--panel)}
+.dsp-chev{display:inline-block;width:14px;color:var(--text-muted);font-size:11px}
+.dsp-fila-detalle>td{padding:0 0 10px!important;background:var(--panel)}
+.dsp-clic{cursor:pointer;border-radius:6px;padding:3px 4px!important}
+.dsp-clic:hover,.dsp-clic.activo{background:var(--panel)}
+.dsp-detalle{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin:4px 6px}
+.dsp-detalle-tit{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:6px}
+.dsp-sub{font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);margin:14px 0 6px}
+.dsp-aviso{font-size:12.5px;background:var(--surface-2);border-left:3px solid #e0a400;padding:8px 10px;border-radius:6px;margin:4px 0 8px;color:var(--text-soft)}
+.dsp-conceptos td.desc{max-width:360px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsp-conceptos tr.cobrado td{color:var(--text-muted)}
+.dsp-estado{font-size:10px;padding:1px 6px;border-radius:99px;background:var(--surface-2);color:var(--text-soft);margin-left:4px;font-weight:600}
+.dsp-estado.ok{background:var(--green-soft);color:var(--green-dark)}
+.dsp-estado.medio{background:#fff3cd;color:#8a6500}
+.dsp-tabla tr.resaltada td{font-weight:700}
+.btn-sm{padding:4px 10px;font-size:12px}
+@media print{ .dsp-detalle{page-break-inside:avoid} }

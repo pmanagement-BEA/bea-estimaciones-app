@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fmtMoney } from '../utils/format'
 import { puedeVerDesempeno, cargarDesempeno, calcularDesempeno, AREAS } from '../lib/desempeno'
 import { COLOR_AREA, textoMes, textoMesCorto, mesIso, nombreCorto } from '../lib/proyecciones'
 import { num } from '../lib/track'
+import { DatosDesempeno, ProyectoDetalle } from '../components/DesempenoProyecto'
 
 const REFRESCO_MS = 5 * 60 * 1000
 const VISTAS = [['general', 'General'], ['area', 'Por área'], ['individual', 'Individual']]
@@ -87,6 +88,7 @@ function Leyenda({ items }) {
 }
 
 function TablaProyectos({ filas, area, onAbrir }) {
+  const [abierto, setAbierto] = useState(null)
   if (!filas.length) return <p className="dsp-vacio">Sin proyectos activos.</p>
   return (
     <div className="dsp-tabla-wrap">
@@ -103,8 +105,9 @@ function TablaProyectos({ filas, area, onAbrir }) {
             const cob = area ? x.cobradoMes[area] || 0 : x.cobradoMesTotal
             const ef = x.eficiencia === null ? null : x.eficiencia * 100
             return (
-              <tr key={x.p.id}>
-                <td><a className="dsp-link" onClick={() => onAbrir(x.p)}>{x.p.name}</a>{!x.ligado && <span className="dsp-tag" title="Sin proyecto ligado en Track">sin horas</span>}</td>
+              <Fragment key={x.p.id}>
+              <tr className={`dsp-fila${abierto === x.p.id ? ' abierta' : ''}`} onClick={() => setAbierto(abierto === x.p.id ? null : x.p.id)} title="Ver desglose por concepto e indicadores">
+                <td><span className="dsp-chev">{abierto === x.p.id ? '▾' : '▸'}</span><a className="dsp-link">{x.p.name}</a>{!x.ligado && <span className="dsp-tag" title="Sin proyecto ligado en Track">sin horas</span>}</td>
                 <td className="sub">{x.lider || '—'}</td>
                 <td className="n"><Barra valor={avance} /> {pct(avance)}</td>
                 <td className="n">{proy ? dinero(proy, x.moneda) : '—'}</td>
@@ -114,6 +117,8 @@ function TablaProyectos({ filas, area, onAbrir }) {
                 <td className="n">{x.porHora ? dinero(x.porHora, x.moneda) : '—'}</td>
                 <td>{x.termino ? textoMes(x.termino) : <span className="sub">{x.porEstimar > 0.5 ? 'Sin proyección' : 'Cobrado'}</span>}</td>
               </tr>
+              {abierto === x.p.id && <tr className="dsp-fila-detalle"><td colSpan={9}><ProyectoDetalle projectId={x.p.id} onAbrir={onAbrir} onCerrar={() => setAbierto(null)} /></td></tr>}
+              </Fragment>
             )
           })}
         </tbody>
@@ -298,6 +303,8 @@ function VistaArea({ r, area, onAbrir, onPersona }) {
 }
 
 function VistaIndividual({ r, clave, onAbrir }) {
+  const [tpSel, setTpSel] = useState(null)
+  useEffect(() => { setTpSel(null) }, [clave])
   const g = r.personas.find(x => x.clave === clave)
   if (!g) return <p className="dsp-vacio">Elige a una persona.</p>
   const lider = g.proyectosLider
@@ -324,12 +331,13 @@ function VistaIndividual({ r, clave, onAbrir }) {
           {g.porProyecto.length ? (
             <ul className="dsp-reparto">
               {g.porProyecto.slice(0, 12).map((x, i) => (
-                <li key={i}><span className="nombre">{x.tp?.nombre || 'Proyecto'}</span><Barra valor={x.h} max={g.porProyecto[0].h} /><span className="n">{hrs(x.h, 1)}</span></li>
+                <li key={i} className={`dsp-clic${tpSel === x.tp?.id ? ' activo' : ''}`} onClick={() => x.tp && setTpSel(tpSel === x.tp.id ? null : x.tp.id)} title="Ver desglose por concepto e indicadores"><span className="nombre"><span className="dsp-chev">{tpSel === x.tp?.id ? '▾' : '▸'}</span>{x.tp?.nombre || 'Proyecto'}</span><Barra valor={x.h} max={g.porProyecto[0].h} /><span className="n">{hrs(x.h, 1)}</span></li>
               ))}
             </ul>
           ) : <p className="dsp-vacio">Sin horas registradas en el mes.</p>}
         </Seccion>
       </div>
+      {tpSel && <Seccion titulo="Desglose del proyecto" sub="indicadores H-H y concepto por concepto"><ProyectoDetalle tpId={tpSel} email={g.email} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} /></Seccion>}
       <Seccion titulo="Proyectos que lidera"><TablaProyectos filas={lider} onAbrir={onAbrir} /></Seccion>
       <Seccion titulo="Atrasos en sus proyectos"><TablaAtrasos atrasos={atrasos} onAbrir={onAbrir} /></Seccion>
     </>
@@ -418,11 +426,13 @@ export default function Desempeno() {
       </div>
 
       {error && <div className="card dsp-error">No se pudo cargar el reporte: {error}</div>}
+      <DatosDesempeno.Provider value={datos}>
       {!r ? <div className="spinner" /> : (
         vista === 'area' ? <VistaArea r={r} area={area} onAbrir={onAbrir} onPersona={onPersona} />
           : vista === 'individual' ? <VistaIndividual r={r} clave={clave} onAbrir={onAbrir} />
             : <VistaGeneral r={r} onAbrir={onAbrir} onPersona={onPersona} />
       )}
+      </DatosDesempeno.Provider>
       <p className="dsp-nota">
         Cobrado = estimaciones Enviadas por el mes de su periodo · Proyectado = módulo de Proyecciones · Horas = histórico de Toggl + registros de Track ·
         Utilización = horas ÷ (días hábiles lun–vie × 8 h) · Eficiencia = (avance × horas del contrato) ÷ horas reales. Los montos en USD se muestran aparte; los % y $/h usan MXN.
