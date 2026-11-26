@@ -204,3 +204,108 @@ export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar, pes
     </div>
   )
 }
+
+/**
+ * Versión sencilla para la vista Individual: horas por concepto, cuánto se cobró y sus indicadores,
+ * en una sola lista (conceptos del contrato + otras actividades + horas de Toggl sin concepto).
+ */
+export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }) {
+  const datos = useContext(DatosDesempeno)
+  const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId, email }) : null), [datos, tpId, email])
+  const [todos, setTodos] = useState(false)
+  const [nombres, setNombres] = useState({})
+  const idsAct = (d?.enTrack || []).filter(x => x.actividadId && !x.conceptoId).map(x => String(x.actividadId)).join(',')
+  useEffect(() => {
+    if (!idsAct) return
+    let vivo = true
+    nombresActividades(idsAct.split(',')).then(n => { if (vivo) setNombres(n) })
+    return () => { vivo = false }
+  }, [idsAct])
+  if (!d) return null
+
+  const yo = d.personas.find(p => p.email?.toLowerCase() === String(email || '').toLowerCase())
+  const horasPeriodo = yo ? (meses.length > 1 ? yo.total : yo.mes) : 0
+  const planDe = area => d.areas.find(a => a.area === area)?.hhPresupuesto ?? null
+  const conHoras = d.conceptos.filter(c => c.horas > 0.01).sort((a, b) => b.horas - a.horas)
+  const sinHoras = d.conceptos.filter(c => !(c.horas > 0.01))
+  const otras = d.enTrack.filter(x => !x.conceptoId)
+  const hConcepto = conHoras.reduce((a, c) => a + c.horas, 0)
+  const cobConcepto = conHoras.reduce((a, c) => a + c.cobrado, 0)
+  const hOtras = otras.reduce((a, x) => a + x.horas, 0)
+  const hToggl = Math.max(0, horasPeriodo - hConcepto - hOtras)
+  const phReal = hConcepto > 0 && cobConcepto > 0 ? cobConcepto / hConcepto : null
+  const planes = [...new Set(conHoras.map(c => planDe(c.area)).filter(Boolean))]
+  const phPlan = planes.length === 1 ? planes[0] : null
+  const maxH = Math.max(1, ...conHoras.map(c => c.horas), ...otras.map(x => x.horas), hToggl)
+
+  return (
+    <div className="dsp-detalle">
+      <div className="dsp-detalle-tit">
+        <b>{d.titulo}</b>
+        <div className="no-print dsp-acciones">
+          {d.proyecto && onAbrir && <button className="btn btn-outline btn-sm" onClick={() => onAbrir(d.proyecto)}>Estimaciones →</button>}
+          {onCerrar && <button className="btn btn-outline btn-sm" onClick={onCerrar} aria-label="Cerrar desglose">✕</button>}
+        </div>
+      </div>
+
+      <div className="dsp-datos">
+        <Dato etiqueta="Sus horas" valor={hrs(horasPeriodo, 1)} nota={meses.length > 1 ? 'últimos 12 meses' : textoMes(datos.mes)} />
+        <Dato etiqueta="Con concepto" valor={hrs(hConcepto, 1)} nota={horasPeriodo > 0 ? `${pct(hConcepto / horasPeriodo)} de sus horas` : 'registradas en Track'} />
+        <Dato etiqueta="Cobrado de esos conceptos" valor={dinero(cobConcepto, d.moneda)} />
+        <Dato etiqueta="$/h real" valor={dinero(phReal, d.moneda)} nota="cobrado ÷ horas" tono={phReal != null && phPlan ? tono(phReal / phPlan) : ''} />
+        {phPlan != null && <Dato etiqueta="$/h plan" valor={dinero(phPlan, d.moneda)} nota="contratado ÷ H-H (RC-OP-43)" />}
+      </div>
+
+      <ul className="dsp-lista-h">
+        <li className="cab"><span>En qué</span><span>Horas</span><span>Cobrado</span><span>$/h</span></li>
+        {conHoras.map(c => {
+          const plan = planDe(c.area)
+          const ph = c.porHora ?? c.porHoraPotencial
+          const rel = c.porHora != null && plan ? c.porHora / plan : null
+          return (
+            <li key={c.id}>
+              <span className="que" title={`${c.descripcion} · ${c.disciplina}`}><b style={{ borderColor: COLOR_AREA[c.area] }}>{c.key}</b>{c.descripcion}</span>
+              <span className="h"><i style={{ width: `${c.horas / maxH * 90}px` }} />{hrs(c.horas, 1)}</span>
+              <span className="n">{c.cobrado > 0.5 ? dinero(c.cobrado, c.moneda) : <span className="sub">por cobrar</span>}</span>
+              <span className={`n ${tono(rel)}`} title={plan ? `Plan ${dinero(plan, c.moneda)}/h` : ''}>{ph != null ? <>{dinero(ph, c.moneda)}{c.porHora == null && <small> pot.</small>}{rel != null && (rel >= 1 ? ' ▲' : ' ▼')}</> : '—'}</span>
+            </li>
+          )
+        })}
+        {otras.map(x => (
+          <li key={x.k} className="otra">
+            <span className="que">{x.actividadId ? nombres[String(x.actividadId)] || 'Actividad' : x.descripcion || 'Sin descripción'}</span>
+            <span className="h"><i style={{ width: `${x.horas / maxH * 90}px` }} />{hrs(x.horas, 1)}</span>
+            <span className="n sub">sin concepto</span><span className="n">—</span>
+          </li>
+        ))}
+        {hToggl > 0.05 && (
+          <li className="otra">
+            <span className="que" title="Horas de Toggl: solo traen el proyecto, no el concepto">Toggl (sin concepto)</span>
+            <span className="h"><i style={{ width: `${hToggl / maxH * 90}px` }} />{hrs(hToggl, 1)}</span>
+            <span className="n sub">—</span><span className="n">—</span>
+          </li>
+        )}
+        {!conHoras.length && !otras.length && hToggl <= 0.05 && <li className="otra"><span className="que sub">Sin horas en el periodo.</span></li>}
+      </ul>
+      {!conHoras.length && <p className="dsp-nota">Las horas por concepto aparecen cuando se registra en Track eligiendo el concepto del contrato.</p>}
+
+      {sinHoras.length > 0 && (
+        <>
+          <button className="btn btn-outline btn-sm no-print" style={{ marginTop: 8 }} onClick={() => setTodos(!todos)}>{todos ? 'Ocultar' : 'Ver'} los {sinHoras.length} conceptos del contrato sin horas</button>
+          {todos && (
+            <ul className="dsp-lista-h compacta">
+              {sinHoras.map(c => (
+                <li key={c.id} className={c.estado === 'Cobrado' ? 'otra' : ''}>
+                  <span className="que" title={c.descripcion}><b style={{ borderColor: COLOR_AREA[c.area] }}>{c.key}</b>{c.descripcion}</span>
+                  <span className="n sub">{c.hhPres != null ? `${hrs(c.hhPres)} plan` : ''}</span>
+                  <span className="n">{dinero(c.monto, c.moneda)}</span>
+                  <span className="n sub">{c.estado}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
+  )
+}

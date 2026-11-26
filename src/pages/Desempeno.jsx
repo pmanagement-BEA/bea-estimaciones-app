@@ -4,7 +4,7 @@ import { fmtMoney } from '../utils/format'
 import { puedeVerDesempeno, cargarDesempeno, calcularDesempeno, AREAS } from '../lib/desempeno'
 import { COLOR_AREA, textoMes, textoMesCorto, mesIso, nombreCorto } from '../lib/proyecciones'
 import { num } from '../lib/track'
-import { DatosDesempeno, ProyectoDetalle } from '../components/DesempenoProyecto'
+import { DatosDesempeno, ProyectoDetalle, DesgloseConceptos } from '../components/DesempenoProyecto'
 
 const REFRESCO_MS = 5 * 60 * 1000
 const VISTAS = [['general', 'General'], ['area', 'Por área'], ['individual', 'Individual']]
@@ -38,49 +38,99 @@ function Barra({ valor, max = 100, color }) {
   return <span className="dsp-barra"><span style={{ width: `${w}%`, background: color || 'var(--green)' }} /></span>
 }
 
-/** Proyectado vs cobrado (MXN) por mes, barras lado a lado */
-function GraficaCobro({ tendencia, moneda = 'MXN' }) {
-  const max = Math.max(1, ...tendencia.map(t => Math.max(t.cobrado[moneda] || 0, t.proyectado[moneda] || 0)))
-  const W = 720, Hh = 180, pad = 26, ancho = (W - pad) / tendencia.length
+/** Cuadro flotante al pasar el mouse por una columna de las gráficas */
+function Flotante({ x, W, titulo, lineas }) {
+  if (!titulo) return null
+  const izq = x / W * 100
   return (
-    <svg className="dsp-grafica" viewBox={`0 0 ${W} ${Hh + 22}`} role="img" aria-label={`Proyectado contra cobrado por mes en ${moneda}`}>
-      {[0.25, 0.5, 0.75, 1].map(f => <line key={f} x1={pad} x2={W} y1={Hh - f * Hh + 4} y2={Hh - f * Hh + 4} className="dsp-guia" />)}
-      {tendencia.map((t, i) => {
-        const x = pad + i * ancho, bw = Math.min(16, ancho / 3)
-        const hp = (t.proyectado[moneda] || 0) / max * Hh, hc = (t.cobrado[moneda] || 0) / max * Hh
-        return (
-          <g key={t.mes}>
-            <rect x={x + ancho / 2 - bw - 1} y={Hh - hp + 4} width={bw} height={hp} rx="2" className="dsp-b-proy"><title>{`${textoMes(t.mes)} · proyectado ${dinero(t.proyectado[moneda], moneda)}`}</title></rect>
-            <rect x={x + ancho / 2 + 1} y={Hh - hc + 4} width={bw} height={hc} rx="2" className="dsp-b-cob"><title>{`${textoMes(t.mes)} · cobrado ${dinero(t.cobrado[moneda], moneda)}`}</title></rect>
-            <text x={x + ancho / 2} y={Hh + 18} textAnchor="middle" className="dsp-eje">{textoMesCorto(t.mes)}</text>
-          </g>
-        )
-      })}
-      <text x={pad - 4} y={12} textAnchor="end" className="dsp-eje">{num(max / 1000)}k</text>
-    </svg>
+    <div className="dsp-flot" style={izq > 60 ? { right: `${100 - izq}%` } : { left: `${izq}%` }} role="tooltip">
+      <b>{titulo}</b>
+      {lineas.length ? <ul>{lineas.map((l, k) => <li key={k}><span>{l[0]}</span><em>{l[1]}</em></li>)}</ul> : <div className="sub">Sin detalle</div>}
+    </div>
   )
 }
 
-/** Horas por mes: directas + indirectas apiladas */
-function GraficaHoras({ tendencia }) {
+/** Proyectado vs cobrado (MXN) por mes; al pasar el mouse dice qué proyectos lo forman */
+function GraficaCobro({ tendencia, moneda = 'MXN', detalle }) {
+  const [hover, setHover] = useState(null)
+  const max = Math.max(1, ...tendencia.map(t => Math.max(t.cobrado[moneda] || 0, t.proyectado[moneda] || 0)))
+  const W = 720, Hh = 180, pad = 26, ancho = (W - pad) / tendencia.length
+  const t = hover != null ? tendencia[hover] : null
+  return (
+    <div className="dsp-graf" onMouseLeave={() => setHover(null)}>
+      <svg className="dsp-grafica" viewBox={`0 0 ${W} ${Hh + 22}`} role="img" aria-label={`Proyectado contra cobrado por mes en ${moneda}`}>
+        {[0.25, 0.5, 0.75, 1].map(f => <line key={f} x1={pad} x2={W} y1={Hh - f * Hh + 4} y2={Hh - f * Hh + 4} className="dsp-guia" />)}
+        {tendencia.map((t, i) => {
+          const x = pad + i * ancho, bw = Math.min(16, ancho / 3)
+          const hp = (t.proyectado[moneda] || 0) / max * Hh, hc = (t.cobrado[moneda] || 0) / max * Hh
+          return (
+            <g key={t.mes} className={hover === i ? 'hover' : ''}>
+              <rect x={x + ancho / 2 - bw - 1} y={Hh - hp + 4} width={bw} height={hp} rx="2" className="dsp-b-proy" />
+              <rect x={x + ancho / 2 + 1} y={Hh - hc + 4} width={bw} height={hc} rx="2" className="dsp-b-cob" />
+              <text x={x + ancho / 2} y={Hh + 18} textAnchor="middle" className="dsp-eje">{textoMesCorto(t.mes)}</text>
+              <rect x={x} y={0} width={ancho} height={Hh + 22} fill="transparent" onMouseEnter={() => setHover(i)} />
+            </g>
+          )
+        })}
+        <text x={pad - 4} y={12} textAnchor="end" className="dsp-eje">{num(max / 1000)}k</text>
+      </svg>
+      {t && <Flotante x={pad + hover * ancho + ancho / 2} W={W} titulo={`${textoMes(t.mes)} · proyectado ${dinero(t.proyectado[moneda], moneda)} · cobrado ${dinero(t.cobrado[moneda], moneda)}`} lineas={detalle ? detalle(t.mes) : []} />}
+    </div>
+  )
+}
+
+/** Horas por mes: directas + indirectas apiladas; al pasar el mouse dice en qué se fueron */
+function GraficaHoras({ tendencia, detalle }) {
+  const [hover, setHover] = useState(null)
   const max = Math.max(1, ...tendencia.map(t => t.horas))
   const W = 720, Hh = 120, pad = 26, ancho = (W - pad) / tendencia.length
+  const t = hover != null ? tendencia[hover] : null
   return (
-    <svg className="dsp-grafica" viewBox={`0 0 ${W} ${Hh + 22}`} role="img" aria-label="Horas registradas por mes">
-      {tendencia.map((t, i) => {
-        const x = pad + i * ancho, bw = Math.min(26, ancho * 0.6)
-        const hd = (t.horas - t.indirectas) / max * Hh, hi = t.indirectas / max * Hh
-        return (
-          <g key={t.mes}>
-            <rect x={x + (ancho - bw) / 2} y={Hh - hd - hi + 4} width={bw} height={hi} className="dsp-b-ind"><title>{`${textoMes(t.mes)} · indirectas ${hrs(t.indirectas)}`}</title></rect>
-            <rect x={x + (ancho - bw) / 2} y={Hh - hd + 4} width={bw} height={hd} className="dsp-b-dir"><title>{`${textoMes(t.mes)} · directas ${hrs(t.horas - t.indirectas)}`}</title></rect>
-            <text x={x + ancho / 2} y={Hh + 18} textAnchor="middle" className="dsp-eje">{textoMesCorto(t.mes)}</text>
-          </g>
-        )
-      })}
-      <text x={pad - 4} y={12} textAnchor="end" className="dsp-eje">{num(max)}</text>
-    </svg>
+    <div className="dsp-graf" onMouseLeave={() => setHover(null)}>
+      <svg className="dsp-grafica" viewBox={`0 0 ${W} ${Hh + 22}`} role="img" aria-label="Horas registradas por mes">
+        {tendencia.map((t, i) => {
+          const x = pad + i * ancho, bw = Math.min(26, ancho * 0.6)
+          const hd = (t.horas - t.indirectas) / max * Hh, hi = t.indirectas / max * Hh
+          return (
+            <g key={t.mes} className={hover === i ? 'hover' : ''}>
+              <rect x={x + (ancho - bw) / 2} y={Hh - hd - hi + 4} width={bw} height={hi} className="dsp-b-ind" />
+              <rect x={x + (ancho - bw) / 2} y={Hh - hd + 4} width={bw} height={hd} className="dsp-b-dir" />
+              <text x={x + ancho / 2} y={Hh + 18} textAnchor="middle" className="dsp-eje">{textoMesCorto(t.mes)}</text>
+              <rect x={x} y={0} width={ancho} height={Hh + 22} fill="transparent" onMouseEnter={() => setHover(i)} />
+            </g>
+          )
+        })}
+        <text x={pad - 4} y={12} textAnchor="end" className="dsp-eje">{num(max)}</text>
+      </svg>
+      {t && <Flotante x={pad + hover * ancho + ancho / 2} W={W} titulo={`${textoMes(t.mes)} · ${hrs(t.horas, 1)} (${hrs(t.indirectas, 1)} indirectas)`} lineas={detalle ? detalle(t.mes) : []} />}
+    </div>
   )
+}
+
+/** En qué proyectos se fueron las horas de un grupo de personas en un mes (para el cuadro flotante) */
+function useDetalleHoras(personas) {
+  const datos = useContext(DatosDesempeno)
+  const nombres = useMemo(() => new Map((datos?.tps || []).map(t => [String(t.id), t.nombre])), [datos])
+  return mes => {
+    const suma = {}
+    for (const g of personas) for (const [id, h] of Object.entries(g.meses[mes]?.porProyecto || {})) suma[id] = (suma[id] || 0) + h
+    const filas = Object.entries(suma).sort((a, b) => b[1] - a[1])
+    const top = filas.slice(0, 8).map(([id, h]) => [nombres.get(String(id)) || 'Proyecto', hrs(h, 1)])
+    const resto = filas.slice(8).reduce((a, f) => a + f[1], 0)
+    return resto > 0.05 ? [...top, [`${filas.length - 8} proyectos más`, hrs(resto, 1)]] : top
+  }
+}
+
+/** Qué proyectos forman lo cobrado y lo proyectado de un mes */
+function detalleCobro(proyectos, area) {
+  return mes => {
+    const filas = proyectos.map(x => {
+      const cob = area ? x.cobradoMeses[mes]?.[area] || 0 : Object.values(x.cobradoMeses[mes] || {}).reduce((a, b) => a + b, 0)
+      const pro = area ? x.proyectadoMeses[mes]?.[area] || 0 : Object.values(x.proyectadoMeses[mes] || {}).reduce((a, b) => a + b, 0)
+      return { x, cob, pro }
+    }).filter(f => f.cob > 0.5 || f.pro > 0.5).sort((a, b) => b.cob - a.cob || b.pro - a.pro)
+    return filas.slice(0, 8).map(f => [f.x.p.name.split(/[_ ]/)[0].slice(0, 28) + ' ' + (f.x.p.name.split('_').slice(1).join(' ').slice(0, 22)), `${f.cob > 0.5 ? dinero(f.cob, f.x.moneda) : '$0'} / ${dinero(f.pro, f.x.moneda)}`])
+  }
 }
 
 function Leyenda({ items }) {
@@ -94,9 +144,9 @@ function TablaProyectos({ filas, area, onAbrir }) {
     <div className="dsp-tabla-wrap">
       <table className="dsp-tabla">
         <thead><tr>
-          <th>Proyecto</th><th>Líder</th><th className="n">Avance</th><th className="n">Proyectado mes</th><th className="n">Cobrado mes</th>
+          <th>Proyecto</th><th>{area ? 'Responsable' : 'Líder'}</th><th className="n">Avance</th><th className="n">Proyectado mes</th><th className="n">Cobrado mes</th>
           <th className="n">Horas reales / est.</th><th className="n" title="(avance × horas estimadas) ÷ horas reales; arriba de 100% va mejor que lo planeado">Eficiencia</th>
-          <th className="n" title="Lo cobrado acumulado ÷ horas reales">$/h</th><th>Término proyectado</th>
+          <th className="n" title="Lo cobrado acumulado ÷ horas reales">$/h</th><th title="Fecha de fin del proyecto; si no tiene, el último mes con proyección">Mes de cierre</th>
         </tr></thead>
         <tbody>
           {filas.map(x => {
@@ -108,14 +158,14 @@ function TablaProyectos({ filas, area, onAbrir }) {
               <Fragment key={x.p.id}>
               <tr className={`dsp-fila${abierto === x.p.id ? ' abierta' : ''}`} onClick={() => setAbierto(abierto === x.p.id ? null : x.p.id)} title="Ver desglose por concepto e indicadores">
                 <td><span className="dsp-chev">{abierto === x.p.id ? '▾' : '▸'}</span><a className="dsp-link">{x.p.name}</a>{!x.ligado && <span className="dsp-tag" title="Sin proyecto ligado en Track">sin horas</span>}</td>
-                <td className="sub">{x.lider || '—'}</td>
+                <td className="sub">{area ? (x.responsablesArea?.[area] || []).map(r => r.nombre).join(', ') || '—' : x.lider || '—'}</td>
                 <td className="n"><Barra valor={avance} /> {pct(avance)}</td>
                 <td className="n">{proy ? dinero(proy, x.moneda) : '—'}</td>
                 <td className={`n ${proy > 0 ? semaforo(cob / proy * 100, 95, 60) : ''}`}>{cob ? dinero(cob, x.moneda) : '—'}</td>
                 <td className="n">{x.horasReales ? hrs(x.horasReales) : '—'}{x.horasEstimadas ? <span className="sub"> / {hrs(x.horasEstimadas)}</span> : null}</td>
                 <td className={`n ${semaforo(ef, 100, 80)}`}>{pct(ef)}</td>
                 <td className="n">{x.porHora ? dinero(x.porHora, x.moneda) : '—'}</td>
-                <td>{x.termino ? textoMes(x.termino) : <span className="sub">{x.porEstimar > 0.5 ? 'Sin proyección' : 'Cobrado'}</span>}</td>
+                <td className="cierre">{x.cierre ? textoMes(x.cierre) : x.termino ? <>{textoMes(x.termino)} <span className="dsp-tag" title="Último mes con proyección">proy.</span></> : <span className="sub">{x.porEstimar > 0.5 ? 'Sin proyección' : 'Cobrado'}</span>}</td>
               </tr>
               {abierto === x.p.id && <tr className="dsp-fila-detalle"><td colSpan={9}><ProyectoDetalle projectId={x.p.id} onAbrir={onAbrir} onCerrar={() => setAbierto(null)} /></td></tr>}
               </Fragment>
@@ -166,11 +216,11 @@ function Alertas({ alertas }) {
   )
 }
 
-function TablaPersonas({ personas, onElegir }) {
+function TablaPersonas({ personas, onElegir, cobradoDe }) {
   return (
     <div className="dsp-tabla-wrap">
       <table className="dsp-tabla">
-        <thead><tr><th>Persona</th><th>Área</th><th className="n">Horas</th><th className="n">Directas</th><th className="n">Indirectas</th><th className="n" title="Horas registradas ÷ (días hábiles × 8 h)">Utilización</th><th className="n">Sin concepto</th></tr></thead>
+        <thead><tr><th>Persona</th><th>Área</th><th className="n">Horas</th><th className="n">Directas</th><th className="n">Indirectas</th><th className="n" title="Horas registradas ÷ (días hábiles × 8 h)">Utilización</th><th className="n">Sin concepto</th>{cobradoDe && <th className="n" title="Lo cobrado este mes en el área de los proyectos donde es responsable">Cobrado del mes</th>}</tr></thead>
         <tbody>
           {personas.map(g => (
             <tr key={g.clave}>
@@ -181,6 +231,7 @@ function TablaPersonas({ personas, onElegir }) {
               <td className={`n ${g.horas > 0 && g.pctIndirectas > 40 ? 'mal' : ''}`}>{pct(g.pctIndirectas)}</td>
               <td className={`n ${semaforo(g.utilizacion, 85, 60)}`}><Barra valor={g.utilizacion} max={110} /> {pct(g.utilizacion)}</td>
               <td className={`n ${g.sinConcepto ? 'medio' : ''}`}>{g.sinConcepto || '—'}</td>
+              {cobradoDe && (() => { const c = cobradoDe(g); return <td className="n fuerte" title={c.detalle}>{c.total > 0.5 ? dinero(c.total) : '—'}</td> })()}
             </tr>
           ))}
         </tbody>
@@ -209,6 +260,7 @@ function IssuesLog() {
 // ── Vistas ──────────────────────────────────────────────────────────────────
 function VistaGeneral({ r, onAbrir, onPersona }) {
   const t = r.totales
+  const detHorasGeneral = useDetalleHoras(r.personas)
   return (
     <>
       <div className="summary-grid dsp-kpis">
@@ -224,11 +276,11 @@ function VistaGeneral({ r, onAbrir, onPersona }) {
 
       <div className="dsp-dos">
         <Seccion titulo="Proyectado vs cobrado" sub="últimos 12 meses · MXN">
-          <GraficaCobro tendencia={r.tendencia} />
+          <GraficaCobro tendencia={r.tendencia} detalle={detalleCobro(r.proyectos)} />
           <Leyenda items={[['dsp-b-proy', 'Proyectado'], ['dsp-b-cob', 'Cobrado']]} />
         </Seccion>
         <Seccion titulo="Horas del equipo" sub="Toggl + Track">
-          <GraficaHoras tendencia={r.tendencia} />
+          <GraficaHoras tendencia={r.tendencia} detalle={detHorasGeneral} />
           <Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} />
         </Seccion>
       </div>
@@ -268,7 +320,15 @@ function VistaGeneral({ r, onAbrir, onPersona }) {
 
 function VistaArea({ r, area, onAbrir, onPersona }) {
   const a = r.areas.find(x => x.area === area)
+  const detHoras = useDetalleHoras(a?.personas || [])
   if (!a) return null
+  // Cobrado del mes por persona: lo del área en los proyectos donde es responsable
+  const cobradoDe = g => {
+    const mios = a.proyectos.filter(x => (x.responsablesArea?.[area] || []).some(r => r.email === String(g.email || '').toLowerCase()))
+    const total = mios.reduce((s, x) => s + (x.moneda === 'MXN' ? x.cobradoMes[area] || 0 : 0), 0)
+    const detalle = mios.filter(x => x.cobradoMes[area] > 0.5).map(x => `${x.p.name}: ${dinero(x.cobradoMes[area], x.moneda)}`).join('\n') || `Responsable de ${mios.length} proyectos del área`
+    return { total, detalle }
+  }
   const tendencia = r.tendencia.map(t => {
     const cobrado = {}, proyectado = {}
     for (const x of r.proyectos) {
@@ -292,10 +352,10 @@ function VistaArea({ r, area, onAbrir, onPersona }) {
         <Kpi etiqueta="Proyectos con el área" valor={a.proyectos.length} sub="activos" />
       </div>
       <div className="dsp-dos">
-        <Seccion titulo="Proyectado vs cobrado" sub={`${area} · MXN`}><GraficaCobro tendencia={tendencia} /><Leyenda items={[['dsp-b-proy', 'Proyectado'], ['dsp-b-cob', 'Cobrado']]} /></Seccion>
-        <Seccion titulo="Horas del área"><GraficaHoras tendencia={tendencia} /><Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} /></Seccion>
+        <Seccion titulo="Proyectado vs cobrado" sub={`${area} · MXN`}><GraficaCobro tendencia={tendencia} detalle={detalleCobro(r.proyectos, area)} /><Leyenda items={[['dsp-b-proy', 'Proyectado'], ['dsp-b-cob', 'Cobrado']]} /></Seccion>
+        <Seccion titulo="Horas del área"><GraficaHoras tendencia={tendencia} detalle={detHoras} /><Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} /></Seccion>
       </div>
-      <Seccion titulo="Personas del área" sub={textoMes(r.mes)}><TablaPersonas personas={a.personas} onElegir={onPersona} /></Seccion>
+      <Seccion titulo="Personas del área" sub={textoMes(r.mes)}><TablaPersonas personas={a.personas} onElegir={onPersona} cobradoDe={cobradoDe} /></Seccion>
       <Seccion titulo="Proyectos" sub="montos y avance solo de esta área"><TablaProyectos filas={a.proyectos} area={area} onAbrir={onAbrir} /></Seccion>
       <Seccion titulo="Atrasos del área"><TablaAtrasos atrasos={a.atrasos} onAbrir={onAbrir} /></Seccion>
     </>
@@ -346,7 +406,7 @@ function RepartoHorasLana({ r, g, tpSel, setTpSel, onAbrir }) {
               <span className="n">{f.porHora != null ? dinero(f.porHora, f.moneda) : '—'}</span>
               <span className="n fuerte">{f.suParte != null ? dinero(f.suParte, f.moneda) : '—'}</span>
             </div>
-            {tpSel === f.tp?.id && <div className="dsp-hl-detalle"><ProyectoDetalle key={tpSel} tpId={tpSel} email={g.email} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} pestanaInicial="actividades" /></div>}
+            {tpSel === f.tp?.id && <div className="dsp-hl-detalle"><DesgloseConceptos key={tpSel} tpId={tpSel} email={g.email} meses={meses} onAbrir={onAbrir} onCerrar={() => setTpSel(null)} /></div>}
           </Fragment>
         ))}
       </div>
@@ -361,6 +421,7 @@ function VistaIndividual({ r, clave, onAbrir }) {
   const [tpSel, setTpSel] = useState(null)
   useEffect(() => { setTpSel(null) }, [clave])
   const g = r.personas.find(x => x.clave === clave)
+  const detHoras = useDetalleHoras(g ? [g] : [])
   if (!g) return <p className="dsp-vacio">Elige a una persona.</p>
   const lider = g.proyectosLider
   const cob = {}, proy = {}
@@ -380,7 +441,7 @@ function VistaIndividual({ r, clave, onAbrir }) {
         <Kpi etiqueta="Cumplimiento" valor={pct(cumplimiento)} sub="de los proyectos que lidera" tono={semaforo(cumplimiento, 95, 60)} />
         <Kpi etiqueta="Atrasos" valor={atrasos.length} sub="en proyectos que lidera" tono={atrasos.length ? 'mal' : 'ok'} />
       </div>
-      <Seccion titulo="Horas por mes" sub="últimos 12 meses"><GraficaHoras tendencia={tendencia} /><Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} /></Seccion>
+      <Seccion titulo="Horas por mes" sub="últimos 12 meses · pasa el mouse para ver en qué"><GraficaHoras tendencia={tendencia} detalle={detHoras} /><Leyenda items={[['dsp-b-dir', 'Directas'], ['dsp-b-ind', 'Indirectas']]} /></Seccion>
       <Seccion titulo="Dónde se fueron las horas" sub="sus horas contra lo que cobra cada proyecto · pícale a uno para ver actividad por actividad">
         <RepartoHorasLana r={r} g={g} tpSel={tpSel} setTpSel={setTpSel} onAbrir={onAbrir} />
       </Seccion>
