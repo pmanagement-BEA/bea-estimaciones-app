@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { toast } from '../Toast'
 import { diaIso } from '../../lib/checador'
-import { saldo, textoDias, cargarAusencias } from '../../lib/ausencias'
+import { saldo, textoDias, cargarAusencias, cargarIngresos, antiguedad, diasVacacionesLey } from '../../lib/ausencias'
 import { FormAusencia, ListaSolicitudes, ChipMotivo, Periodo } from './Ausencias'
 
 /** Una solicitud pendiente con sus botones de aprobar y rechazar. */
@@ -21,7 +21,7 @@ function PorAprobar({ a, persona, motivo, s, alResolver, propia }) {
     <div className="por-aprobar">
       <div className="info">
         <div className="persona">{persona}</div>
-        <div className="linea"><ChipMotivo m={motivo} /> <b>{textoDias(a.dias)}</b> · <Periodo a={a} /></div>
+        <div className="linea"><ChipMotivo m={motivo} /> <b>{textoDias(a.dias)}</b> · <Periodo a={a} />{+a.dias_sin_goce > 0 && <span className="chip-sin-goce">{textoDias(a.dias_sin_goce)} sin goce de sueldo</span>}</div>
         {a.observaciones && <div className="obs">“{a.observaciones}”</div>}
         {s && <div className={`saldo-linea ${s.disponibles < 0 ? 'neg' : ''}`}>Saldo de {motivo.nombre}: {textoDias(s.disponibles)} disponibles (ya contando esta)</div>}
       </div>
@@ -50,7 +50,27 @@ function Saldos({ personas, motivos, datos, nombres, yo, alCambiar }) {
   const [form, setForm] = useState(null)
   const [abierto, setAbierto] = useState(null)
   const [buscar, setBuscar] = useState('')
+  const [ingresos, setIngresos] = useState({})
+  const [asignando, setAsignando] = useState(false)
+  useEffect(() => { cargarIngresos().then(setIngresos) }, [])
   const m = conSaldo.find(x => x.id === motivoId)
+  const esVacaciones = m?.nombre === 'Vacaciones'
+
+  async function guardarIngreso(email, fecha) {
+    const { error } = fecha
+      ? await supabase.from('rh_ingresos').upsert({ email, fecha_ingreso: fecha, actualizado_por: yo, actualizado_en: new Date().toISOString() })
+      : await supabase.from('rh_ingresos').delete().eq('email', email)
+    if (error) { toast('No se guardó la fecha de ingreso: ' + error.message, true); return }
+    setIngresos(x => { const y = { ...x }; if (fecha) y[email] = fecha; else delete y[email]; return y })
+  }
+  async function asignarPorLey(email = null) {
+    setAsignando(true)
+    const { data, error } = await supabase.rpc('asignar_vacaciones_ley', { p_email: email })
+    setAsignando(false)
+    if (error) { toast(error.message, true); return }
+    toast(data ? `Días por ley asignados a ${data} ${data === 1 ? 'persona' : 'personas'} ✓` : 'Nadie tenía días por ley pendientes de asignar (revisa las fechas de ingreso)')
+    alCambiar()
+  }
   if (!m) return <div className="vacio-chk">Ningún motivo lleva saldo. Márcalo en “Motivos”.</div>
   const q = buscar.trim().toLowerCase()
   const filas = personas.filter(p => !q || p.nombre.toLowerCase().includes(q)).map(p => ({ p, s: saldo(m.id, datos.asignaciones.filter(a => a.email === p.email), datos.ausencias.filter(a => a.email === p.email)) }))
@@ -73,8 +93,10 @@ function Saldos({ personas, motivos, datos, nombres, yo, alCambiar }) {
       <div className="barra-rh">
         {conSaldo.length > 1 && <select value={motivoId} onChange={e => setMotivoId(+e.target.value)}>{conSaldo.map(x => <option key={x.id} value={x.id}>{x.nombre}</option>)}</select>}
         <input className="buscar-chk" placeholder="Buscar persona…" value={buscar} onChange={e => setBuscar(e.target.value)} />
+        {esVacaciones && <button className="btn btn-outline btn-sm" disabled={asignando} onClick={() => asignarPorLey()} title="Asigna a cada persona con fecha de ingreso los días que le tocan por ley en su año de antigüedad (una sola vez por año)">⚖ Asignar días por ley</button>}
         <button className="btn btn-primary btn-sm" onClick={() => setForm({ email: '', dias: '', inicio: '', fin: '', nota: '' })}>＋ Asignar días</button>
       </div>
+      {esVacaciones && <div className="ayuda-rh">Pon la <b>fecha de ingreso</b> de cada quien y usa <b>⚖ Asignar días por ley</b>: le toca a cada persona lo de la LFT según su antigüedad (12 días el primer año, +2 por año hasta 20, luego +2 cada 5 años). Si alguien pide más vacaciones de las que tiene, lo que falte queda <b>sin goce de sueldo</b> automáticamente.</div>}
       <div className="aviso-chk">📥 Pendiente: importar los saldos de cada persona desde Woffu (se necesita la exportación de la cuenta de administrador de Woffu). Mientras, se pueden capturar aquí.</div>
       {form && (
         <div className="form-asignar">
@@ -88,7 +110,7 @@ function Saldos({ personas, motivos, datos, nombres, yo, alCambiar }) {
       )}
       <div className="tabla-chk-wrap">
         <table className="tabla-chk admin">
-          <thead><tr><th>Persona</th><th className="num">Asignados</th><th className="num">Aprobados</th><th className="num">Pendientes</th><th className="num">Disponibles</th></tr></thead>
+          <thead><tr><th>Persona</th>{esVacaciones && <><th>Ingreso</th><th className="num">Antigüedad</th><th className="num">Por ley</th></>}<th className="num">Asignados</th><th className="num">Aprobados</th><th className="num">Pendientes</th><th className="num">Disponibles</th><th className="num">Sin goce</th></tr></thead>
           <tbody>
             {filas.map(({ p, s }) => {
               const ab = abierto === p.email
@@ -96,11 +118,21 @@ function Saldos({ personas, motivos, datos, nombres, yo, alCambiar }) {
               return [
                 <tr key={p.email} className={`persona ${s.asignados ? '' : 'sin-horas'}`} onClick={() => setAbierto(ab ? null : p.email)}>
                   <td><span className="flecha">{ab ? '▾' : '▸'}</span> <strong>{p.nombre}</strong></td>
+                  {esVacaciones && (() => {
+                    const ing = ingresos[p.email] || ''
+                    const anios = antiguedad(ing)
+                    return <>
+                      <td onClick={e => e.stopPropagation()}><input type="date" className="ingreso-rh" value={ing} onChange={e => guardarIngreso(p.email, e.target.value)} aria-label={`Fecha de ingreso de ${p.nombre}`} /></td>
+                      <td className="num">{anios == null ? '—' : `${anios} ${anios === 1 ? 'año' : 'años'}`}</td>
+                      <td className="num">{anios == null ? '—' : anios < 1 ? <span className="sub">aún no</span> : diasVacacionesLey(anios)}</td>
+                    </>
+                  })()}
                   <td className="num">{+s.asignados}</td><td className="num">{+s.dispuestos}</td><td className="num">{+s.pendientes || ''}</td>
                   <td className={`num ${s.disponibles < 0 ? 'neg-txt' : ''}`}><strong>{+s.disponibles}</strong></td>
+                  <td className="num">{(() => { const sg = datos.ausencias.filter(a => a.email === p.email && a.motivo_id === m.id && ['aprobada', 'pendiente'].includes(a.estado)).reduce((t, a) => t + (+a.dias_sin_goce || 0), 0); return sg ? <span className="neg-txt">{sg}</span> : '' })()}</td>
                 </tr>,
                 ab && (
-                  <tr key={p.email + '-d'} className="detalle"><td colSpan={5}>
+                  <tr key={p.email + '-d'} className="detalle"><td colSpan={esVacaciones ? 9 : 6}>
                     {asig.length === 0 ? <span className="sub">Sin asignaciones.</span> : (
                       <ul className="asignaciones">{asig.map(a => (
                         <li key={a.id}><b>{+a.dias > 0 ? '+' : ''}{textoDias(a.dias)}</b>{a.inicio || a.fin ? <span className="sub"> · {a.inicio || '…'} a {a.fin || '…'}</span> : null}{a.nota && <span> · {a.nota}</span>}<span className="sub"> · {nombres[a.creado_por] || a.creado_por}</span><button className="quitar" onClick={() => quitar(a)} aria-label="Quitar">✕</button></li>
