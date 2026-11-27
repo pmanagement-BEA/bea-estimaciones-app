@@ -4,50 +4,57 @@ import { fmtMoney } from '../utils/format'
 import { textoMes } from '../lib/proyecciones'
 import { estadoConcepto, agregarAProyecciones, marcarCompletoEnBorrador } from '../lib/trackConcepto'
 
-/** Bajo el cronómetro de Track: si el tiempo va a un concepto del contrato, ofrece proyectarlo o marcarlo completo en el borrador. */
-export default function AccionesConceptoTrack({ projectId, conceptId }) {
-  const [st, setSt] = useState(null)
+/**
+ * Al elegir un concepto del contrato en Track: cómo va (¿cobrado? ¿proyectado? ¿en el borrador?)
+ * y, si falta, botones para proyectarlo o marcarlo completo en el borrador de estimación.
+ */
+export default function AccionesConceptoTrack({ projectId, conceptId, onCambio }) {
+  const [st, setSt] = useState(undefined)
   const [ocupado, setOcupado] = useState(false)
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
-    setSt(null)
+    setSt(undefined)
     if (!projectId || !conceptId) return
     let vivo = true
     estadoConcepto(projectId, conceptId).then(x => vivo && setSt(x)).catch(() => vivo && setSt(null))
     return () => { vivo = false }
   }, [projectId, conceptId, version])
 
-  if (!st) return null
+  if (!projectId || !conceptId || st === null) return null
+  if (st === undefined) return <div className="acc-concepto-trk"><span className="txt">Revisando el concepto…</span></div>
   const moneda = st.project.currency || 'MXN'
   const num = st.borrador ? `#${String(st.borrador.number).padStart(3, '0')}` : ''
 
   async function hacer(fn, ok) {
     setOcupado(true)
-    try { const r = await fn(st); toast(ok(r)); setVersion(v => v + 1) } catch (e) { toast(e.message, true) }
+    try { const r = await fn(st); toast(ok(r)); setVersion(v => v + 1); onCambio?.() } catch (e) { toast(e.message, true) }
     setOcupado(false)
   }
 
   return (
     <div className="acc-concepto-trk">
-      <span className="txt">
-        <b>{st.concept.key}</b> {st.cobrado ? '· ya se cobró completo' : `· por cobrar ${fmtMoney(st.porEstimar, moneda)}`}
+      <span className="txt"><b>{st.concept.key}</b> {st.concept.description}</span>
+      <span className="estados">
+        <span className={`chip ${st.cobrado ? 'si' : 'no'}`}>{st.cobrado ? '✓ Cobrado' : `Cobrado: falta ${fmtMoney(st.porEstimar, moneda)}`}</span>
+        {!st.cobrado && <span className={`chip ${st.proyectado ? 'si' : 'no'}`}>{st.proyectado ? `✓ Proyectado ${textoMes(st.proyectado.mes)}` : 'Sin proyectar'}</span>}
+        {!st.cobrado && <span className={`chip ${st.enBorrador && !st.borradorParcial ? 'si' : 'no'}`}>{st.enBorrador ? (st.borradorParcial ? `Parcial en el borrador ${num}` : `✓ En el borrador ${num}`) : 'No está en el borrador'}</span>}
       </span>
-      {!st.cobrado && (
+      {!st.cobrado && (!st.proyectado || !st.enBorrador || st.borradorParcial) && (
         <span className="btns">
-          {st.proyectado
-            ? <span className="hecho">✓ En proyecciones de {textoMes(st.mes)}</span>
-            : <button className="btn btn-outline btn-sm" disabled={ocupado}
-                title={st.mes !== st.mesEnTurno ? `Las proyecciones de ${textoMes(st.mesEnTurno)} ya están congeladas` : ''}
-                onClick={() => hacer(agregarAProyecciones, () => `Agregado a proyecciones de ${textoMes(st.mes)} ✓`)}>
-                📈 Agregar a proyecciones de {textoMes(st.mes)}
-              </button>}
-          {st.enBorrador
-            ? <span className="hecho">✓ Completo en el borrador {num}</span>
-            : <button className="btn btn-outline btn-sm" disabled={ocupado}
-                onClick={() => hacer(marcarCompletoEnBorrador, r => `Marcado completo en el borrador #${String(r.estimacion.number).padStart(3, '0')} (${fmtMoney(r.monto, moneda)}) ✓`)}>
-                ✓ Marcar completo en el borrador {num || 'de estimación'}
-              </button>}
+          {!st.proyectado && (
+            <button type="button" className="btn btn-outline btn-sm" disabled={ocupado}
+              title={st.mes !== st.mesEnTurno ? `Las proyecciones de ${textoMes(st.mesEnTurno)} ya están congeladas` : ''}
+              onClick={() => hacer(agregarAProyecciones, () => `Proyectado en ${textoMes(st.mes)} ✓`)}>
+              📈 Proyectar en {textoMes(st.mes)}
+            </button>
+          )}
+          {(!st.enBorrador || st.borradorParcial) && (
+            <button type="button" className="btn btn-outline btn-sm" disabled={ocupado}
+              onClick={() => hacer(marcarCompletoEnBorrador, r => `Completo en el borrador #${String(r.estimacion.number).padStart(3, '0')} (${fmtMoney(r.monto, moneda)}) ✓`)}>
+              ✓ Marcar completo en el borrador {num}
+            </button>
+          )}
         </span>
       )}
     </div>

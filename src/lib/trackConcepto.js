@@ -1,39 +1,69 @@
 // Desde Track, cuando el tiempo va a un concepto del contrato: agregarlo a las proyecciones del mes
 // o marcarlo completo en el borrador de estimación. Usa las mismas reglas que Proyecciones y la Estimación.
 import { supabase } from './supabase'
-import { prepararProyecto, conceptosPorEstimar, estaCongelada, mesIso, sumarMeses } from './proyecciones'
+import { prepararProyecto, conceptosPorEstimar, estaCongelada, mesIso, sumarMeses, textoMesCorto } from './proyecciones'
 import { periodoBorrador, mesDelPeriodo } from '../utils/cierre'
 import { nextNumber } from '../utils/aditivas'
 import { itemAmount, projectRates, disciplineArea } from '../utils/calculations'
 import { quitarAreaLista } from './cierre'
 
-/** Todo lo que hace falta para decidir qué se puede hacer con un concepto. */
-export async function estadoConcepto(projectId, conceptId) {
-  const { data: p, error } = await supabase.from('projects')
-    .select('*, disciplines(*, concepts(*)), estimations(*, estimation_items(*))').eq('id', projectId).single()
+/** Proyecto con su contrato, estimaciones y proyecciones: lo necesario para saber cómo va cada concepto. */
+async function cargarProyecto(projectId) {
+  const [{ data: p, error }, { data: prs }] = await Promise.all([
+    supabase.from('projects').select('*, disciplines(*, concepts(*)), estimations(*, estimation_items(*))').eq('id', projectId).single(),
+    supabase.from('proyecciones').select('id, mes, concept_id').eq('project_id', projectId),
+  ])
   if (error) throw error
   const { disciplines, estimations } = prepararProyecto(p)
+  const borrador = estimations.find(e => e.status === 'Borrador') || null
+  const enviadas = estimations.filter(e => e.status === 'Enviada')
+  const pendientes = new Map(conceptosPorEstimar(p, disciplines, enviadas).map(x => [x.concept.id, x]))
+  // Mes de la estimación en turno; si sus proyecciones ya se congelaron, el siguiente mes abierto
+  const periodo = borrador || periodoBorrador(estimations)
+  const mesEnTurno = mesDelPeriodo(periodo.period_from, periodo.period_to) || mesIso(new Date())
+  let mes = mesEnTurno
+  for (let k = 0; k < 3 && estaCongelada(mes); k++) mes = sumarMeses(mes, 1)
+  return { p, disciplines, estimations, borrador, pendientes, mes, mesEnTurno, prs: prs || [] }
+}
+
+function estadoEn(base, conceptId) {
+  const { p, disciplines, estimations, borrador, pendientes, mes, mesEnTurno, prs } = base
   const disc = disciplines.find(d => d.concepts.some(c => c.id === conceptId))
   const concept = disc?.concepts.find(c => c.id === conceptId)
   if (!concept) return null
-  const borrador = estimations.find(e => e.status === 'Borrador') || null
-  const enviadas = estimations.filter(e => e.status === 'Enviada')
-  const pend = conceptosPorEstimar(p, disciplines, enviadas).find(x => x.concept.id === conceptId)
-  // Mes de la estimación en turno; si sus proyecciones ya se congelaron, el siguiente mes abierto
-  const periodo = borrador || periodoBorrador(estimations)
-  let mes = mesDelPeriodo(periodo.period_from, periodo.period_to) || mesIso(new Date())
-  const mesEnTurno = mes
-  for (let k = 0; k < 3 && estaCongelada(mes); k++) mes = sumarMeses(mes, 1)
-  const { data: prs } = await supabase.from('proyecciones').select('id, mes').eq('project_id', projectId).eq('concept_id', conceptId).gte('mes', mesEnTurno)
+  const pend = pendientes.get(conceptId)
   const item = borrador?.estimation_items?.find(i => i.concept_id === conceptId)
+  // Proyectado: en el mes en turno o después (el primero que haya)
+  const proyectado = prs.filter(x => x.concept_id === conceptId && x.mes >= mesEnTurno).sort((a, b) => a.mes.localeCompare(b.mes))[0] || null
   return {
     project: p, disciplines, estimations, disc, concept, borrador,
     area: disciplineArea(disc) || 'Consultoría',
     porEstimar: pend?.porEstimar || 0,
     cobrado: !pend, // ya se cobró completo en estimaciones enviadas
-    mes, mesEnTurno, proyectado: (prs || []).find(x => x.mes === mes) || null,
-    enBorrador: !!item?.included && !item?.parcial_enabled,
+    mes, mesEnTurno, proyectado,
+    enBorrador: !!item?.included,
+    borradorParcial: !!item?.included && !!item?.parcial_enabled,
   }
+}
+
+/** Todo lo que hace falta para decidir qué se puede hacer con un concepto. */
+export async function estadoConcepto(projectId, conceptId) {
+  return estadoEn(await cargarProyecto(projectId), conceptId)
+}
+
+/** Estado de todos los conceptos de un proyecto (para mostrarlo en la lista de Track): { conceptId: estado } */
+export async function estadosConceptos(projectId) {
+  const base = await cargarProyecto(projectId)
+  return Object.fromEntries(base.disciplines.flatMap(d => d.concepts.map(c => [c.id, estadoEn(base, c.id)])))
+}
+
+/** Etiqueta corta: cobrado · en borrador · proyectado dic 26 · sin proyectar */
+export function etiquetaEstado(st) {
+  if (!st) return ''
+  if (st.cobrado) return '✓ cobrado'
+  if (st.enBorrador) return st.borradorParcial ? 'parcial en borrador' : 'en borrador'
+  if (st.proyectado) return `proyectado ${textoMesCorto(st.proyectado.mes)}`
+  return 'sin proyectar'
 }
 
 export async function agregarAProyecciones(st) {

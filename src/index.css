@@ -1283,3 +1283,6 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .acc-concepto-trk .txt{color:var(--text-soft)}
 .acc-concepto-trk .btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .acc-concepto-trk .hecho{font-weight:700;color:var(--green-dark);font-size:12px}
+.acc-concepto-trk .estados{display:flex;flex-wrap:wrap;gap:6px}
+.acc-concepto-trk .chip{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(183,121,31,.12);color:#9A6412}
+.acc-concepto-trk .chip.si{background:rgba(22,101,52,.12);color:var(--green-dark)}
