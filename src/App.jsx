@@ -5,6 +5,7 @@ import { pideContrasena, supabase } from './lib/supabase'
 import CrearContrasena from './pages/CrearContrasena'
 import { useAuth } from './hooks/useAuth'
 import TopBar from './components/TopBar'
+import BarraLateral from './components/BarraLateral'
 import Toast from './components/Toast'
 import Login from './pages/Login'
 import Projects from './pages/Projects'
@@ -47,6 +48,9 @@ export default function App() {
       {session && <TopBar profile={profile} onSignOut={signOut} />}
       <Toast />
       <VersionNueva />
+      <div className="app-cuerpo">
+      {session && <BarraLateral />}
+      <div className="app-contenido">
       <Routes>
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/" element={<PrivateRoute><Inicio /></PrivateRoute>} />
@@ -68,6 +72,8 @@ export default function App() {
         <Route path="/projects/:id/aditivas/:adId/edit" element={<PrivateRoute><AditivaForm /></PrivateRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </div>
+      </div>
     </BrowserRouter>
   )
 }
