@@ -132,7 +132,7 @@ export default function ProyeccionesProyecto() {
   return (
     <div className="main">
       <div className="breadcrumb">
-        <a onClick={() => navigate('/')}>Mis Proyectos</a><span className="sep">›</span>
+        <a onClick={() => navigate('/proyectos')}>Mis Proyectos</a><span className="sep">›</span>
         <a onClick={() => navigate(`/projects/${id}/setup`)}>{project.name}</a><span className="sep">›</span>
         <span className="current">Proyecciones</span>
       </div>

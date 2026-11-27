@@ -439,7 +439,7 @@ export default function Track() {
   }
   return (
     <div className="main">
-      <div className="breadcrumb"><a onClick={() => navigate('/')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Track</span></div>
+      <div className="breadcrumb"><a onClick={() => navigate('/proyectos')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Track</span></div>
       <h1 className="page-title">Track <span className="chip-trk beta">beta</span></h1>
       <div className="pestanas-proy" role="tablist">
         {pestanas.map(([k, t, d]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'activa' : ''} onClick={() => setTab(k)}><div className="t-pest">{t}</div><span>{d}</span></button>)}

@@ -101,7 +101,7 @@ export default function Dashboard() {
               Solo donde estoy asignado
             </label>
           )}
-          <button className="btn btn-outline" onClick={() => navigate('/')}>← Mis Proyectos</button>
+          <button className="btn btn-outline" onClick={() => navigate('/proyectos')}>← Mis Proyectos</button>
         </div>
       </div>
 

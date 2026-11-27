@@ -416,7 +416,7 @@ export default function ProjectSetup() {
     const { error } = await supabase.from('projects').delete().eq('id', id)
     if (error) { toast('Error al eliminar', true); return }
     toast('Proyecto eliminado')
-    navigate('/')
+    navigate('/proyectos')
   }
 
   // ── Ir a estimación del mes ────────────────────────────────────────────────
@@ -465,7 +465,7 @@ export default function ProjectSetup() {
     <div className="main">
       {/* Breadcrumb */}
       <div className="breadcrumb">
-        <a onClick={() => navigate('/')}>Mis Proyectos</a>
+        <a onClick={() => navigate('/proyectos')}>Mis Proyectos</a>
         <span className="sep">›</span>
         <span className="current">{project.name}</span>
       </div>

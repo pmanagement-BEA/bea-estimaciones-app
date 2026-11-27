@@ -404,7 +404,7 @@ export default function Checador() {
   return (
     <div className="main">
       <div className="breadcrumb">
-        <a onClick={() => navigate('/')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Checador</span>
+        <a onClick={() => navigate('/proyectos')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Checador</span>
       </div>
       <h1 className="page-title">Checador</h1>
       <div className="pestanas-proy" role="tablist">
