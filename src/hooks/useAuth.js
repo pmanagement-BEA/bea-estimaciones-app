@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { borrarPermisosGuardados } from '../lib/desempeno'
 
 export function useAuth() {
   const [session, setSession] = useState(null)
@@ -16,7 +17,7 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       if (session) fetchProfile(session.user.id)
-      else { setProfile(null); setLoading(false); try { sessionStorage.removeItem('bea_ve_desempeno') } catch { /* sin almacenamiento */ } }
+      else { setProfile(null); setLoading(false); borrarPermisosGuardados() }
     })
 
     return () => subscription.unsubscribe()
@@ -38,7 +39,7 @@ export function useAuth() {
   }
 
   async function signOut() {
-    try { sessionStorage.removeItem('bea_ve_desempeno') } catch { /* sin almacenamiento */ }
+    borrarPermisosGuardados()
     await supabase.auth.signOut()
   }
 
