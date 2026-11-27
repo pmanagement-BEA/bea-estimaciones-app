@@ -1150,3 +1150,5 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .inicio-desc{font-size:13px;line-height:1.4;color:rgba(255,255,255,.74)}
 :root[data-theme=dark] .inicio-tarjeta:hover{box-shadow:0 14px 30px rgba(0,0,0,.5)}
 @media (max-width:640px){ .inicio{padding:28px 16px 40px;gap:24px} .inicio-cab h1{font-size:26px} .inicio-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px} .inicio-tarjeta{padding:20px 12px;gap:10px;border-radius:16px} .inicio-icono{width:52px;height:52px} .inicio-nombre{font-size:15px} .inicio-desc{font-size:12px} }
+/* Escritorio: 4 columnas fijas; Checador siempre en la última columna de la segunda fila (debajo de Track) */
+@media (min-width:900px){ .inicio-grid{grid-template-columns:repeat(4,minmax(0,1fr))} .inicio-tarjeta.s-checador{grid-column:4;grid-row:2} }
