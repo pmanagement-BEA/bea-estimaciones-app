@@ -1061,7 +1061,7 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .rcx-logo{height:26px}
 .rcx-banda{display:flex;justify-content:space-between;align-items:center;background:#00205b;color:#fff;font-weight:700;padding:5px 12px;margin:4px 0 8px;font-size:14px}
 .rcx-banda span:first-child{flex:1;text-align:center}
-.rcx-fecha{font-size:12px;padding:1px 4px;border:0;border-radius:3px}
+.rcx-fecha{font-size:12px;padding:1px 4px;border:0;border-radius:3px;background:#fff;color:#00205b;font-weight:700;color-scheme:light}
 .rcx .solo-print{display:none}
 .rcx-sec h3{background:#c8c8c8;margin:10px 0 6px;padding:3px 8px;font-size:15px;color:#2f6f5f}
 .rcx-sec h3 em{font-size:11px;font-weight:400;color:#888}
