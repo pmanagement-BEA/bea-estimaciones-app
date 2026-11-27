@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { estadosConceptos, etiquetaEstado } from '../lib/trackConcepto'
 import { cargarActividades, cargarConceptos } from '../lib/track'
 
 export const sinAcentos = s => (s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -62,6 +63,8 @@ export function useOpciones(proyecto) {
         const generales = GENERALES.map(n => porNombre.get(n) ? { valor: `a:${porNombre.get(n).id}`, nombre: n } : { valor: `g:${n}`, nombre: n })
         const usadas = new Set(generales.filter(g => g.valor.startsWith('a:')).map(g => g.valor))
         setOps({ conceptos: c, generales, actividades: a.filter(x => x.activo && !usadas.has(`a:${x.id}`)) })
+        // Cómo va cada concepto (cobrado, proyectado, en borrador): llega después, para no frenar la lista
+        if (c.length && proyecto.project_id) estadosConceptos(proyecto.project_id).then(estados => vivo && setOps(o => ({ ...o, estados }))).catch(() => {})
       })
       .catch(() => vivo && setOps({ actividades: [], conceptos: [], generales: [] }))
     return () => { vivo = false }
@@ -75,7 +78,7 @@ export function SelectorActividad({ ops, valor, alCambiar }) {
       <option value="">— Concepto o actividad —</option>
       {ops.conceptos.length > 0 && (
         <optgroup label="Conceptos de la estimación">
-          {ops.conceptos.map(c => <option key={c.id} value={`c:${c.id}`}>{c.key} {c.description}</option>)}
+          {ops.conceptos.map(c => <option key={c.id} value={`c:${c.id}`}>{c.key} {c.description}{ops.estados?.[c.id] ? ` · ${etiquetaEstado(ops.estados[c.id])}` : ''}</option>)}
         </optgroup>
       )}
       {ops.generales?.length > 0 && (

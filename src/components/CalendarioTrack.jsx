@@ -4,6 +4,7 @@ import { toast } from './Toast'
 import { diaIso, hhmm, aInstante, lunesDe, sumarDias, cargarChecadas } from '../lib/checador'
 import { cargarRegistros, duracionMs, diaDe, textoH, H } from '../lib/track'
 import { BuscadorProyecto, useOpciones, SelectorActividad, juntar, resolverActividad } from './TrackCampos'
+import AccionesConceptoTrack from './AccionesConceptoTrack'
 
 // Colores por proyecto (estables: dependen del id)
 const PALETA = ['#7C3AED', '#C026D3', '#DB2777', '#E11D48', '#EA580C', '#D97706', '#65A30D', '#16A34A', '#0D9488', '#0891B2', '#0284C7', '#2563EB', '#4F46E5', '#9333EA', '#B45309', '#047857']
@@ -82,6 +83,7 @@ function FormRegistro({ datos, proyectos, porId, alCerrar, alGuardar }) {
         <input ref={ref} className="desc" value={desc} onChange={e => setDesc(e.target.value)} placeholder="¿Qué hiciste?" aria-label="Descripción" />
         <BuscadorProyecto proyectos={proyectos} valor={proy?.id} alElegir={p => { setProy(p); setAct(''); setFact(p.facturable) }} />
         <SelectorActividad ops={ops} valor={act} alCambiar={setAct} />
+        {act.startsWith('c:') && proy?.project_id && <AccionesConceptoTrack projectId={proy.project_id} conceptId={act.slice(2)} />}
         <div className="horas-cal-trk">
           <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} aria-label="Fecha" />
           <input type="time" value={desde} onChange={e => setDesde(e.target.value)} aria-label="Desde" />
