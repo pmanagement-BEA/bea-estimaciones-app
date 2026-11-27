@@ -245,5 +245,5 @@ export async function descargarReporteExcel(datos) {
   const wb = await libroReporte(ExcelJS, datos, logo, datos.logoCliente)
   const buf = await wb.xlsx.writeBuffer()
   const codigo = (datos.proyecto || '').split(/[-_]/)[0]
-  bajarArchivo(buf, `${codigo}-RC-OP-01 Reporte mensual ${mesReporte(datos.periodFrom, datos.periodTo)}.xlsx`)
+  bajarArchivo(buf, `${codigo}-RC-OP-01 Reporte mensual ${mesReporte(datos.periodFrom, datos.periodTo)}${datos.area ? ` - ${ETIQUETA_AREA[datos.area]}` : ''}.xlsx`)
 }
