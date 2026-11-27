@@ -1261,3 +1261,6 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
   .bl-item{padding:2px}
 }
 @media print{ .barra-lat{display:none!important} .app-cuerpo{display:block} }
+
+/* Desempeño mientras se confirma el permiso: guarda su lugar para que nada brinque */
+.inicio-tarjeta.pendiente,.bl-item.pendiente{visibility:hidden;pointer-events:none}

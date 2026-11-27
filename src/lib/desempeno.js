@@ -14,9 +14,28 @@ const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
 const lower = s => String(s || '').toLowerCase().trim()
 
 /** ¿La persona que entró puede ver el reporte? */
-export async function puedeVerDesempeno() {
-  const { data, error } = await supabase.rpc('ve_desempeno')
-  return !error && data === true
+// Permiso de Desempeño. Al recargar, la consulta puede salir antes de que la sesión esté lista:
+// se reintenta y el resultado se guarda por usuario para pintar la barra y el Inicio sin brincos.
+const CLAVE_PERMISO = 'bea_ve_desempeno'
+const claveDe = email => `${CLAVE_PERMISO}:${String(email || '').toLowerCase()}`
+export function permisoGuardado(email) {
+  if (!email) return null
+  try { const v = localStorage.getItem(claveDe(email)); return v === '1' ? true : v === '0' ? false : null } catch { return null }
+}
+export function borrarPermisosGuardados() {
+  try { Object.keys(localStorage).filter(k => k.startsWith(CLAVE_PERMISO)).forEach(k => localStorage.removeItem(k)) } catch { /* sin almacenamiento */ }
+}
+export async function puedeVerDesempeno(email) {
+  for (let intento = 0; intento < 3; intento++) {
+    if (intento) await new Promise(r => setTimeout(r, 1200 * intento))
+    const { data, error } = await supabase.rpc('ve_desempeno')
+    if (error) continue
+    if (data === true || (data === false && (await supabase.auth.getSession()).data?.session)) {
+      if (email) { try { localStorage.setItem(claveDe(email), data ? '1' : '0') } catch { /* sin almacenamiento */ } }
+      return data
+    }
+  }
+  return permisoGuardado(email) ?? false
 }
 
 /** Días hábiles (lunes a viernes) de un mes, hasta hoy si es el mes en curso. */

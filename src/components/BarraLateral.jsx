@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { puedeVerDesempeno } from '../lib/desempeno'
+import { useVeDesempeno } from '../hooks/useVeDesempeno'
 import { SECCIONES, GRUPOS } from '../lib/secciones'
 
 /** Barra lateral para saltar entre secciones sin volver al Inicio. Se puede plegar (solo íconos). En el Inicio no sale. */
@@ -10,12 +10,11 @@ export default function BarraLateral() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const ruta = pathname.replace(/^\/bea-estimaciones-app/, '') || '/'
-  const [veDesempeno, setVeDesempeno] = useState(false)
+  const veDesempeno = useVeDesempeno(profile?.email)
   const [plegada, setPlegada] = useState(() => { try { return localStorage.getItem('bea_barra_plegada') === '1' } catch { return false } })
-  useEffect(() => { if (profile?.email) puedeVerDesempeno().then(setVeDesempeno) }, [profile?.email])
   useEffect(() => { try { localStorage.setItem('bea_barra_plegada', plegada ? '1' : '0') } catch { /* sin almacenamiento */ } }, [plegada])
   if (ruta === '/' || ruta.startsWith('/login')) return null
-  const visibles = SECCIONES.filter(s => !s.soloDesempeno || veDesempeno)
+  const visibles = SECCIONES.filter(s => !s.soloDesempeno || veDesempeno !== false)
 
   return (
     <aside className={`barra-lat no-print${plegada ? ' plegada' : ''}`} aria-label="Secciones">
@@ -32,7 +31,7 @@ export default function BarraLateral() {
               {items.map(s => {
                 const activa = s.activa(ruta)
                 return (
-                  <a key={s.ruta} href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}${s.ruta}`} className={`bl-item${activa ? ' activa' : ''}`} aria-current={activa ? 'page' : undefined} title={s.nombre}
+                  <a key={s.ruta} href={`${import.meta.env.BASE_URL.replace(/\/$/, '')}${s.ruta}`} className={`bl-item${activa ? ' activa' : ''}${s.soloDesempeno && veDesempeno == null ? ' pendiente' : ''}`} aria-hidden={s.soloDesempeno && veDesempeno == null ? true : undefined} tabIndex={s.soloDesempeno && veDesempeno == null ? -1 : undefined} aria-current={activa ? 'page' : undefined} title={s.nombre}
                     onClick={e => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return; e.preventDefault(); navigate(s.ruta) }}>
                     <span className="bl-icono"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={s.icono} /></svg></span>
                     <span className="bl-nombre">{s.nombre}</span>
