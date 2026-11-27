@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import ReporteTrackDiario from '../components/ReporteTrackDiario'
+import { puedeVerReporteDiario } from '../lib/reporteDiario'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -416,12 +418,13 @@ export default function Track() {
   const [proyectos, setProyectos] = useState(null)
   const [gente, setGente] = useState([])
   const [verTodo, setVerTodo] = useState(false)
+  const [veDiario, setVeDiario] = useState(false)
 
   useEffect(() => {
     cargarProyectos().then(setProyectos).catch(e => { toast('No se pudieron cargar los proyectos: ' + e.message, true); setProyectos([]) })
     supabase.from('directorio').select('email, nombre, area, activo').then(({ data }) => setGente(data || []))
   }, [])
-  useEffect(() => { if (email) supabase.rpc('ve_todo_track').then(({ data }) => setVerTodo(!!data)) }, [email])
+  useEffect(() => { if (email) { supabase.rpc('ve_todo_track').then(({ data }) => setVerTodo(!!data)); puedeVerReporteDiario().then(setVeDiario) } }, [email])
   const porId = useMemo(() => Object.fromEntries((proyectos || []).map(p => [p.id, p])), [proyectos])
 
   const pestanas = [
@@ -429,12 +432,14 @@ export default function Track() {
     ['semana', 'Mi semana', 'horas por proyecto y día'],
     ['reportes', 'Reportes', verTodo ? 'equipo, proyectos y áreas' : 'mis horas'],
     ['proyectos', 'Proyectos', 'estimado contra real'],
+    ...(veDiario ? [['diario', 'Reporte diario', 'horas del equipo por día']] : []),
   ]
   let contenido = <div className="vacio-chk">Cargando…</div>
   if (proyectos && email) {
     if (tab === 'semana') contenido = <MiSemana email={email} porId={porId} />
     else if (tab === 'reportes') contenido = <Reportes email={email} verTodo={verTodo} porId={porId} gente={gente} />
     else if (tab === 'proyectos') contenido = <Catalogo proyectos={proyectos} />
+    else if (tab === 'diario' && veDiario) contenido = <ReporteTrackDiario />
     else contenido = <Registrar email={email} proyectos={proyectos} porId={porId} />
   }
   return (
