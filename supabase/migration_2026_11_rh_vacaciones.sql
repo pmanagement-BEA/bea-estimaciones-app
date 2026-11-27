@@ -67,7 +67,8 @@ begin
   end if;
   -- Vacaciones (motivos con saldo): lo que no alcance del saldo queda como días sin goce de sueldo
   select con_saldo into conSaldo from ausencia_motivos where id = p_motivo;
-  if conSaldo then
+  -- Solo si la persona ya tiene días cargados (mientras no se carguen los saldos oficiales, no se marca nada sin goce)
+  if conSaldo and exists (select 1 from ausencia_asignaciones where email = quien and motivo_id = p_motivo) then
     disp := public.saldo_ausencia(quien, p_motivo);
     sinGoce := greatest(0, n - greatest(disp, 0));
   end if;

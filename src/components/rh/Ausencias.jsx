@@ -72,7 +72,8 @@ export function FormAusencia({ motivos, email, personas = null, asignaciones = [
           {f.inicio && (
             <div className={`resumen-dias ${n === 0 ? 'cero' : ''}`}>
               {n === 0 ? 'En esas fechas no hay días laborables.' : <>Son <b>{textoDias(n)} laborables</b> (sin fines de semana ni festivos).</>}
-              {s && n > 0 && s.disponibles - n < 0 && (() => {
+              {s && n > 0 && !propias.a.some(x => x.motivo_id === m.id) && <div className="aviso">Tu saldo de {m.nombre.toLowerCase()} todavía no está cargado en la app: la solicitud se envía normal y RH la revisa.</div>}
+              {s && n > 0 && propias.a.some(x => x.motivo_id === m.id) && s.disponibles - n < 0 && (() => {
                 const conGoce = Math.max(0, Math.min(n, s.disponibles))
                 return <div className="aviso">⚠ {conGoce > 0
                   ? <>Tienes {textoDias(s.disponibles)} de {m.nombre.toLowerCase()}: <b>{textoDias(conGoce)} con goce</b> y <b>{textoDias(n - conGoce)} sin goce de sueldo</b>.</>
