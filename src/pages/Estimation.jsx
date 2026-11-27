@@ -1163,10 +1163,17 @@ export default function Estimation() {
                 </div>
                 {perms.todo && areasRpt.length > 1 && (
                   <div className="rpt-lider">
-                    <span>{listos.length} de {areasRpt.length} listos</span>
+                    <span>{listos.length} de {areasRpt.length} listos · Descargar:</span>
+                    {areasRpt.map(a => (
+                      <button key={a} className="btn btn-outline btn-sm" disabled={!reportes[a]?.id}
+                        title={reportes[a]?.id ? `Excel RC-OP-01 de ${ETIQUETA_AREA[a]}${estadoRpt(a) === 'listo' ? '' : ' (aún en captura)'}` : `${ETIQUETA_AREA[a]} aún no empieza su reporte`}
+                        onClick={async () => { try { await excelDeArea(a, await leerLogoCliente(project)) } catch (err) { toast('No se pudo generar el Excel: ' + err.message, true) } }}>
+                        ⬇ {ETIQUETA_AREA[a]}{estadoRpt(a) === 'listo' ? ' ✓' : ''}
+                      </button>
+                    ))}
                     <button className="btn btn-primary btn-sm" disabled={!todosListos} onClick={bajarLosReportes}
                       title={todosListos ? 'Descarga el Excel RC-OP-01 de cada área' : `Falta: ${areasRpt.filter(a => estadoRpt(a) !== 'listo').map(a => ETIQUETA_AREA[a]).join(', ')}`}>
-                      ⬇ Descargar los {areasRpt.length}
+                      ⬇ Los {areasRpt.length}
                     </button>
                   </div>
                 )}
