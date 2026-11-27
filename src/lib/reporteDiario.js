@@ -1,8 +1,9 @@
-// Reporte diario de Track: en qué se fueron las horas de un día (empresa, área y persona) y quién registró
+// Reporte diario de Track (más los registros de Toggl del día, tabla track_toggl_entradas): en qué se fueron las horas de un día (empresa, área y persona) y quién registró
 // menos de lo que le tocaba. Lo ven solo quienes tienen ve_reporte_diario en el Directorio (public.ve_reporte_diario()).
 // Le tocaba = 8 h en día hábil; 0 en fin de semana, festivo (de ley o del calendario BEA) o con ausencia aprobada.
 import { supabase } from './supabase'
 import { cargarRegistros, duracionMs, esIndirecto, H } from './track'
+import { aInstante } from './checador'
 import { cargarChecadas, setCalendarioBea, setMotivosAusencia, motivoAusencia, resumenDia, tipoDia, sumarDias, diaIso } from './checador'
 import { cargarMotivos } from './ausencias'
 
@@ -32,13 +33,19 @@ export function diaHabilAnterior(hoy = diaIso()) {
 }
 
 export async function cargarDia(fecha) {
-  const [dir, tps, regs, chk] = await Promise.all([
+  const [dir, tps, regsTrack, chk] = await Promise.all([
     supabase.from('directorio').select('email, nombre, area, activo').eq('activo', true),
     supabase.from('track_proyectos').select('id, nombre, project_id, facturable'),
     cargarRegistros({ desde: fecha, hasta: fecha }),
     cargarChecadas({ desde: fecha, hasta: fecha }).catch(() => ({ checadas: [], ediciones: [], ausencias: [] })),
   ])
   if (dir.error) throw dir.error
+  const regs = [...regsTrack]
+  // Registros de Toggl del día (mientras el equipo termina de pasarse a Track)
+  const tg = await supabase.from('track_toggl_entradas').select('*')
+    .gte('inicio', aInstante(fecha, '00:00')).lt('inicio', aInstante(sumarDias(fecha, 1), '00:00')).limit(5000)
+  const deToggl = (tg.data || []).map(e => ({ id: 't' + e.id, email: e.email, proyecto_id: e.proyecto_id, actividad_id: e.actividad_id, concepto_id: null, descripcion: e.descripcion, inicio: e.inicio, fin: e.fin, toggl: true }))
+  regs.push(...deToggl)
   // Nombres de actividades y conceptos de los registros del día
   const actIds = [...new Set(regs.map(r => r.actividad_id).filter(Boolean))]
   const conIds = [...new Set(regs.map(r => r.concepto_id).filter(Boolean))]
@@ -76,7 +83,7 @@ export function calcularDia(d, ahora = Date.now()) {
         return {
           id: r.id, inicio: r.inicio, fin: r.fin, ms: duracionMs(r, ahora), proyecto: tp?.nombre || 'Proyecto',
           que: r.concepto_id ? d.conceptos[r.concepto_id] : r.actividad_id ? d.actividades[String(r.actividad_id)] : '',
-          descripcion: r.descripcion || '', conConcepto: !!r.concepto_id, indirecto: esIndirecto(tp),
+          descripcion: r.descripcion || '', conConcepto: !!r.concepto_id, indirecto: esIndirecto(tp), toggl: !!r.toggl,
         }
       }),
     }

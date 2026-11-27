@@ -61,12 +61,12 @@ function TablaPersonas({ personas }) {
                           <li key={r.id}>
                             <span className="hora">{hhmm(r.inicio)}–{r.fin ? hhmm(r.fin) : 'corriendo'}</span>
                             <span className="que"><b>{r.proyecto}</b>{r.que && <> · {r.que}</>}{r.descripcion && <span className="sub"> — {r.descripcion}</span>}</span>
-                            {!r.conConcepto && !r.indirecto && <span className="rd-tag aviso">sin concepto</span>}
+                            {r.toggl ? <span className="rd-tag">Toggl</span> : !r.conConcepto && !r.indirecto && <span className="rd-tag aviso">sin concepto</span>}
                             <span className="n">{h(r.ms)}</span>
                           </li>
                         ))}
                       </ul>
-                    ) : <p className="rd-vacio">No registró nada en Track este día.</p>}
+                    ) : <p className="rd-vacio">No registró nada este día (ni en Track ni en Toggl).</p>}
                   </td></tr>
                 )}
               </Fragment>
@@ -163,7 +163,7 @@ export default function ReporteTrackDiario() {
           {vista === 'individual' && (
             <section className="card rd-sec"><h3>Todas las personas</h3><TablaPersonas personas={[...r.personas].sort((a, b) => a.area.localeCompare(b.area) || a.nombre.localeCompare(b.nombre))} /></section>
           )}
-          <p className="rd-nota">Le tocaba = 8 h en día hábil; 0 en fin de semana, festivo o con ausencia aprobada. Solo cuenta lo registrado en Track (lo de Toggl no llega por día).</p>
+          <p className="rd-nota">Le tocaba = 8 h en día hábil; 0 en fin de semana, festivo o con ausencia aprobada. Cuenta lo registrado en Track y en Toggl (los de Toggl llevan la etiqueta Toggl; se actualizan cuando se vuelve a cargar desde Toggl).</p>
         </>
       )}
     </div>
