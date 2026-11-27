@@ -1268,7 +1268,7 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 /* Reporte mensual por área (estimación) */
 .rpt-areas-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .rpt-areas-sub{font-size:12px;color:var(--text-muted);margin-top:2px}
-.rpt-lider{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:600;color:var(--text-soft)}
+.rpt-lider{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:12px;font-weight:600;color:var(--text-soft)}
 .rpt-areas-fila{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
 .rpt-area{display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 14px;border-radius:10px;border:1.5px solid var(--border);background:var(--panel);cursor:pointer;text-align:left;font:inherit;color:var(--text)}
 .rpt-area .nom{font-weight:700;font-size:13.5px}
@@ -1276,3 +1276,4 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .rpt-area.listo .est{color:var(--green-dark);font-weight:700}
 .rpt-area.captura .est{color:#B7791F}
 .rpt-area.sel{border-color:var(--green);box-shadow:0 0 0 2px rgba(34,139,34,.15)}
+.rpt-lider .btn:disabled{opacity:.45;cursor:not-allowed}
