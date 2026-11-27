@@ -1276,3 +1276,4 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .rpt-area.listo .est{color:var(--green-dark);font-weight:700}
 .rpt-area.captura .est{color:#B7791F}
 .rpt-area.sel{border-color:var(--green);box-shadow:0 0 0 2px rgba(34,139,34,.15)}
+.rpt-lider .btn:disabled{opacity:.45;cursor:not-allowed}
