@@ -11,6 +11,7 @@ const I = {
   directorio: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7" /><path d="M18.5 14.8c1.6.8 2.6 2.6 3 5.2" /></>,
   checador: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2.5 2.5" /><path d="M9 2h6" /></>,
   track: <><path d="M3 12h4l3-8 4 16 3-8h4" /></>,
+  reportecx: <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5" /><path d="M10 13h6" /><path d="M10 17h4" /></>,
   desempeno: <><circle cx="12" cy="12" r="9" /><path d="M12 12l5-3" /><path d="M12 3v2" /><path d="M3 12h2" /><path d="M19 12h2" /></>,
   salir: <><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3" /><path d="M10 16l4-4-4-4" /><path d="M14 12H4" /></>,
 }
@@ -24,6 +25,7 @@ const NAV = [
   ['/proyecciones', 'proyecciones', 'Proyecciones', p => p.startsWith('/proyecciones')],
   ['/checador', 'checador', 'Checador', p => p.startsWith('/checador')],
   ['/track', 'track', 'Track', p => p.startsWith('/track')],
+  ['/reporte-cx', 'reportecx', 'Reporte Cx', p => p.startsWith('/reporte-cx')],
   ['/desempeno', 'desempeno', 'Desempeño', p => p.startsWith('/desempeno'), false, true],
   ['/directorio', 'directorio', 'Directorio', p => p.startsWith('/directorio')],
 ]

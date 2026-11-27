@@ -20,6 +20,7 @@ import ProyeccionesProyecto from './pages/ProyeccionesProyecto'
 import Track from './pages/Track'
 import Checador from './pages/Checador'
 import Desempeno from './pages/Desempeno'
+import ReporteCx from './pages/ReporteCx'
 
 function PrivateRoute({ children }) {
   const { session, loading } = useAuth()
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/dashboard" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
         <Route path="/directorio" element={<PrivateRoute><Directorio /></PrivateRoute>} />
         <Route path="/checador" element={<PrivateRoute><Checador /></PrivateRoute>} />
+        <Route path="/reporte-cx" element={<PrivateRoute><ReporteCx /></PrivateRoute>} />
         <Route path="/desempeno" element={<PrivateRoute><Desempeno /></PrivateRoute>} />
         <Route path="/track" element={<PrivateRoute><Track /></PrivateRoute>} />
         <Route path="/proyecciones" element={<PrivateRoute><Proyecciones /></PrivateRoute>} />

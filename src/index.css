@@ -1038,3 +1038,74 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .dsp-conf.media{background:#fff3cd;color:#8a6500}
 .dsp-conf.baja{background:#fde2e2;color:#a13030}
 .dsp-conf.manual{background:#dbe9fb;color:#1f5aa6}
+
+/* ── Reporte mensual Cx ───────────────────────────────────────────────────── */
+.rcx .input{padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)}
+.rcx-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.rcx-card{all:unset;box-sizing:border-box;cursor:pointer;background:var(--card);border:1px solid var(--border);border-left:4px solid var(--border-strong);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;transition:box-shadow .12s,transform .12s}
+.rcx-card:hover{box-shadow:0 3px 10px rgba(0,0,0,.08);transform:translateY(-1px)}
+.rcx-card:focus-visible{outline:2px solid var(--green)}
+.rcx-card.borrador{border-left-color:#e0a400}.rcx-card.enviado{border-left-color:var(--green)}
+.rcx-card .nombre{font-weight:700;color:var(--navy);font-size:13px}
+.rcx-card .pie{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.rcx .sub{font-size:11.5px;color:var(--text-muted)}
+.rcx-estado{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--surface-2);color:var(--text-soft)}
+.rcx-estado.borrador{background:#fff3cd;color:#8a6500}.rcx-estado.enviado{background:var(--green-soft);color:var(--green-dark)}
+.rcx-barra{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
+.rcx-aviso{font-size:12.5px;background:var(--surface-2);border-left:3px solid #e0a400;padding:7px 10px;border-radius:6px}
+/* La hoja: imita el formato del Sheet (carta vertical) */
+.rcx-hoja{background:#fff;color:#333;max-width:820px;margin:0 auto;padding:22px 26px;border:1px solid var(--border);border-radius:6px;font-family:'Century Gothic','Avenir Next',Arial,sans-serif}
+.rcx-cab{display:flex;justify-content:space-between;align-items:center}
+.rcx-titulo{font-size:17px;font-weight:700;color:#777}
+.rcx-titulo i{font-weight:800}
+.rcx-logo{height:26px}
+.rcx-banda{display:flex;justify-content:space-between;align-items:center;background:#00205b;color:#fff;font-weight:700;padding:5px 12px;margin:4px 0 8px;font-size:14px}
+.rcx-banda span:first-child{flex:1;text-align:center}
+.rcx-fecha{font-size:12px;padding:1px 4px;border:0;border-radius:3px}
+.rcx .solo-print{display:none}
+.rcx-sec h3{background:#c8c8c8;margin:10px 0 6px;padding:3px 8px;font-size:15px;color:#2f6f5f}
+.rcx-sec h3 em{font-size:11px;font-weight:400;color:#888}
+.rcx-imp{display:flex;gap:12px;align-items:flex-start;margin:4px 0 8px}
+.rcx-imp b{font-style:italic;color:#555;white-space:nowrap;font-size:13px}
+.rcx-imp textarea{flex:1;font:inherit;font-size:11.5px;color:#5c1a5c;font-weight:600;border:1px dashed #ccc;border-radius:4px;padding:4px 6px;resize:vertical;background:#fff}
+.rcx-dos{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:center}
+.rcx-tabla{border-collapse:collapse;width:100%;font-size:12.5px}
+.rcx-tabla th,.rcx-tabla td{border:1px dashed #555;padding:3px 6px}
+.rcx-tabla thead th{background:#bbb;color:#eee;font-size:11px;text-align:center}
+.rcx-tabla tbody th{text-align:left;color:#2f6f5f;font-weight:600;white-space:nowrap}
+.rcx-tabla td{text-align:center;width:62px;font-weight:700;color:#333}
+.rcx-tabla tr.na td{color:#999;font-weight:400}
+.rcx-na{font-size:10px;color:#999;margin-left:6px;font-weight:400}
+.rcx-celda{width:44px;text-align:center;border:1px solid transparent;border-radius:3px;font:inherit;font-weight:700;padding:1px;background:#fff;color:#333}
+.rcx-celda:hover,.rcx-celda:focus{border-color:#bbb;background:#fffbe8}
+.rcx-pct{display:inline-flex;align-items:center}
+.rcx-pct .rcx-celda{width:36px}
+.rcx-graf{width:100%;height:auto;font-size:8px;fill:#555}
+.rcx-graf .guia{stroke:#ddd}
+.rcx-graf .meta{fill:#6aa84f}.rcx-graf .avance{fill:#16a085}
+.rcx-graf .dona-base{fill:none;stroke:#e5e5e5;stroke-width:16}
+.rcx-graf .dona-abiertos{fill:none;stroke:#4a86e8;stroke-width:16}
+.rcx-graf .dona-num{font-size:16px;font-weight:700;fill:#333}
+.rcx-correo{max-width:820px;margin:14px auto 0;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
+.rcx-correo h3{font-size:14px;margin:6px 0;color:var(--navy)}
+.rcx-conceptos{list-style:none;margin:0 0 6px;padding:0;max-height:260px;overflow:auto}
+.rcx-conceptos li{padding:3px 0;border-top:1px solid var(--border);font-size:12.5px}
+.rcx-conceptos label{display:flex;gap:6px;align-items:baseline;cursor:pointer}
+.rcx-tag{font-size:10px;background:var(--green-soft);color:var(--green-dark);border-radius:99px;padding:0 7px;font-weight:700;margin-left:6px;white-space:nowrap}
+.rcx-mail>div{display:flex;gap:8px;align-items:center;font-size:12.5px;margin:4px 0}
+.rcx-mail>div span{width:52px;color:var(--text-muted)}
+.rcx-mail pre{white-space:pre-wrap;font-family:inherit;font-size:12.5px;background:var(--panel);border-radius:8px;padding:10px;margin:6px 0}
+@media (max-width:760px){ .rcx-dos{grid-template-columns:1fr} .rcx-hoja{padding:12px} }
+@media print{
+  body:has(.rcx-hoja) .rcx-correo,body:has(.rcx-hoja) .rcx-barra,body:has(.rcx-hoja) .rcx-aviso{display:none!important}
+  .rcx-hoja{border:0;padding:0;max-width:none;margin:0}
+  .rcx .solo-print{display:inline}
+  .rcx-na,.rcx-fecha{display:none!important}
+  .rcx-imp textarea{border:0;resize:none;padding:0}
+  .rcx-celda{border:0}
+  .rcx-banda,.rcx-sec h3,.rcx-tabla thead th{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:letter portrait;margin:10mm}
+}
+.rcx-txt{white-space:pre-wrap;font-size:11.5px;color:#5c1a5c;font-weight:600}
+@media print{ .rcx-imp textarea{display:none!important} .rcx .solo-print.rcx-txt{display:block} }
+.rcx-tag.gris{background:var(--surface-2);color:var(--text-soft)}
