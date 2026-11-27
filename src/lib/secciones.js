@@ -1,6 +1,6 @@
 // Secciones de la app: las usan el Inicio (tarjetas) y la barra de arriba (nombre de la sección actual).
 // Orden = orden del Inicio (en escritorio, 4 columnas: los verdes y Track arriba, los azules y Checador abajo).
-// grupo: color de la tarjeta (verde oscuro · burgundy · azul marino). soloDesempeno: solo coordinación, PMO y Dirección.
+// grupo: color de la tarjeta (verde oscuro · burgundy · azul marino). soloDesempeno: solo coordinación, PMO y Dirección. soloReporteDiario: solo PMO, Dirección y Héctor.
 export const GRUPOS = [
   { id: 'operacion', nombre: 'Operación' },
   { id: 'tiempo', nombre: 'Tiempo' },
@@ -16,6 +16,7 @@ export const SECCIONES = [
   { ruta: '/desempeno', nombre: 'Desempeño', desc: 'Indicadores en vivo y RC-OP-43', grupo: 'gestion', icono: 'M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18zM12 12l5-3', activa: p => p.startsWith('/desempeno'), soloDesempeno: true },
   { ruta: '/directorio', nombre: 'Directorio', desc: 'Equipo, áreas y permisos', grupo: 'gestion', icono: 'M9 4.5a3.5 3.5 0 1 1 0 7a3.5 3.5 0 1 1 0-7zM2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.6.8 2.6 2.6 3 5.2', activa: p => p.startsWith('/directorio') },
   { ruta: '/checador', nombre: 'Checador', desc: 'Entradas, salidas y ausencias', grupo: 'tiempo', icono: 'M12 5a8 8 0 1 1 0 16a8 8 0 1 1 0-16zM12 9v4l2.5 2.5M9 2h6', activa: p => p.startsWith('/checador') },
+  { ruta: '/reporte-diario', nombre: 'Reporte diario', desc: 'Horas del día por área y persona', grupo: 'tiempo', icono: 'M3 4h18v17H3zM3 9h18M8 2v4M16 2v4M7 13h4M7 17h7', activa: p => p.startsWith('/reporte-diario'), soloReporteDiario: true },
 ]
 
 export const seccionDe = ruta => SECCIONES.find(s => s.activa(ruta)) || null
