@@ -763,6 +763,36 @@ export default function Estimation() {
           )}
 
           {/* Lo proyectado para este mes: lista compacta con su estado y botón para marcar */}
+          {/* Conceptos que se marcaron desde Track (quién y qué día) */}
+          {(() => {
+            const desdeTrack = disciplines.flatMap(d => d.concepts.map(c => ({ c, d, it: items[c.id] })))
+              .filter(x => x.it?.included && x.it?.marcado_desde === 'track')
+              .sort((a, b) => (b.it.marcado_en || '').localeCompare(a.it.marcado_en || ''))
+            if (!desdeTrack.length) return null
+            const total = desdeTrack.reduce((s, x) => s + (+x.it.amount || 0), 0)
+            const dia = ts => ts ? new Date(ts).toLocaleDateString('es-MX', { weekday: 'short', day: 'numeric', month: 'short' }) : '—'
+            return (
+              <div className="card mb-md no-print proyectados-mes" style={{ borderLeft: '4px solid #4A1320', padding: '10px 16px' }}>
+                <div style={{ fontSize: 13, marginBottom: 6 }}>
+                  <strong>Marcado desde Track:</strong> {desdeTrack.length} {desdeTrack.length === 1 ? 'concepto' : 'conceptos'} · {fmtMoney(total, project.currency)}
+                </div>
+                <table className="tabla-proyectados">
+                  <tbody>
+                    {desdeTrack.map(({ c, d, it }) => (
+                      <tr key={c.id}>
+                        <td className="clave">{c.key}</td>
+                        <td className="desc" title={c.description}>{c.description}</td>
+                        <td className="area">{disciplineArea(d) || ''}</td>
+                        <td className="num">{fmtMoney(it.amount, project.currency)}</td>
+                        <td className="estado" style={{ color: 'var(--text-soft)' }}>{dia(it.marcado_en)}{it.marcado_por ? ` · ${it.marcado_por.split(' ')[0]}` : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          })()}
+
           {estimation.status === 'Borrador' && proyectados.lista.length > 0 && (() => {
             const faltan = porMarcar()
             const total = proyectados.lista.reduce((x, p) => x + (+p.monto || 0), 0)

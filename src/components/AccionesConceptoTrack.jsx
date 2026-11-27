@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { toast } from './Toast'
+import { useAuth } from '../hooks/useAuth'
 import { fmtMoney } from '../utils/format'
 import { textoMes } from '../lib/proyecciones'
 import { estadoConcepto, agregarAProyecciones, marcarCompletoEnBorrador } from '../lib/trackConcepto'
@@ -9,6 +10,7 @@ import { estadoConcepto, agregarAProyecciones, marcarCompletoEnBorrador } from '
  * y, si falta, botones para proyectarlo o marcarlo completo en el borrador de estimación.
  */
 export default function AccionesConceptoTrack({ projectId, conceptId, onCambio }) {
+  const { profile } = useAuth()
   const [st, setSt] = useState(undefined)
   const [ocupado, setOcupado] = useState(false)
   const [version, setVersion] = useState(0)
@@ -51,7 +53,7 @@ export default function AccionesConceptoTrack({ projectId, conceptId, onCambio }
           )}
           {(!st.enBorrador || st.borradorParcial) && (
             <button type="button" className="btn btn-outline btn-sm" disabled={ocupado}
-              onClick={() => hacer(marcarCompletoEnBorrador, r => `Completo en el borrador #${String(r.estimacion.number).padStart(3, '0')} (${fmtMoney(r.monto, moneda)}) ✓`)}>
+              onClick={() => hacer(x => marcarCompletoEnBorrador(x, profile?.nombre || profile?.email || ''), r => `Completo en el borrador #${String(r.estimacion.number).padStart(3, '0')} (${fmtMoney(r.monto, moneda)}) ✓`)}>
               ✓ Marcar completo en el borrador {num}
             </button>
           )}

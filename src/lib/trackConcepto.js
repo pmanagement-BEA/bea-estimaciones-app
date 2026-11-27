@@ -78,7 +78,7 @@ export async function agregarAProyecciones(st) {
 }
 
 /** Marca el concepto completo (100 %) en el borrador; si no hay borrador del proyecto activo, lo crea. */
-export async function marcarCompletoEnBorrador(st) {
+export async function marcarCompletoEnBorrador(st, quien = '') {
   let est = st.borrador
   if (!est) {
     if (st.project.status !== 'Activo') throw new Error(`El proyecto está ${(st.project.status || 'sin estado').toLowerCase()} y no tiene borrador de estimación`)
@@ -90,7 +90,7 @@ export async function marcarCompletoEnBorrador(st) {
   const previo = (est.estimation_items || []).find(i => i.concept_id === st.concept.id)
   const item = { included: true, parcial_enabled: false, pct_parcial: 0, delayed: previo?.delayed || false, cause: previo?.cause || '' }
   const amount = itemAmount(item, st.concept, st.disc, projectRates(st.project), st.disciplines)
-  const payload = { estimation_id: est.id, concept_id: st.concept.id, ...item, amount }
+  const payload = { estimation_id: est.id, concept_id: st.concept.id, ...item, amount, marcado_desde: 'track', marcado_por: quien, marcado_en: new Date().toISOString() }
   const { error } = previo?.id
     ? await supabase.from('estimation_items').update(payload).eq('id', previo.id)
     : await supabase.from('estimation_items').insert(payload)
