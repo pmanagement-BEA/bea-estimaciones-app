@@ -4,7 +4,7 @@ import { fmtMoney } from '../utils/format'
 import { puedeVerDesempeno, cargarDesempeno, calcularDesempeno, AREAS } from '../lib/desempeno'
 import { COLOR_AREA, textoMes, textoMesCorto, mesIso, nombreCorto } from '../lib/proyecciones'
 import { num } from '../lib/track'
-import { DatosDesempeno, ProyectoDetalle, DesgloseConceptos } from '../components/DesempenoProyecto'
+import { DatosDesempeno, RecargaDesempeno, ProyectoDetalle, DesgloseConceptos } from '../components/DesempenoProyecto'
 
 const REFRESCO_MS = 5 * 60 * 1000
 const VISTAS = [['general', 'General'], ['area', 'Por área'], ['individual', 'Individual']]
@@ -533,6 +533,7 @@ export default function Desempeno() {
       </div>
 
       {error && <div className="card dsp-error">No se pudo cargar el reporte: {error}</div>}
+      <RecargaDesempeno.Provider value={cargar}>
       <DatosDesempeno.Provider value={datos}>
       {!r ? <div className="spinner" /> : (
         vista === 'area' ? <VistaArea r={r} area={area} onAbrir={onAbrir} onPersona={onPersona} />
@@ -540,6 +541,7 @@ export default function Desempeno() {
             : <VistaGeneral r={r} onAbrir={onAbrir} onPersona={onPersona} />
       )}
       </DatosDesempeno.Provider>
+      </RecargaDesempeno.Provider>
       <p className="dsp-nota">
         Cobrado = estimaciones Enviadas por el mes de su periodo · Proyectado = módulo de Proyecciones · Horas = histórico de Toggl + registros de Track ·
         Utilización = horas ÷ (días hábiles lun–vie × 8 h) · Eficiencia = (avance × horas del contrato) ÷ horas reales. Los montos en USD se muestran aparte; los % y $/h usan MXN.
