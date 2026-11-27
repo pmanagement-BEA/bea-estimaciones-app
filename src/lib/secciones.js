@@ -1,6 +1,6 @@
 // Secciones de la app: las usan el Inicio (tarjetas) y la barra de arriba (nombre de la sección actual).
 // Orden = orden del Inicio (en escritorio, 4 columnas: los verdes y Track arriba, los azules y Checador abajo).
-// grupo: color de la tarjeta (verde oscuro · burgundy · azul marino). soloDesempeno: solo coordinación, PMO y Dirección. soloReporteDiario: solo PMO, Dirección y Héctor.
+// grupo: color de la tarjeta (verde oscuro · burgundy · azul marino). soloDesempeno: solo coordinación, PMO y Dirección. soloReporteDiario: solo quien tiene ve_reporte_diario en el Directorio.
 export const GRUPOS = [
   { id: 'operacion', nombre: 'Operación' },
   { id: 'tiempo', nombre: 'Tiempo' },

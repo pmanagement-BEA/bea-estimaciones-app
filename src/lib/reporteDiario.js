@@ -1,5 +1,5 @@
 // Reporte diario de Track: en qué se fueron las horas de un día (empresa, área y persona) y quién registró
-// menos de lo que le tocaba. Lo ven solo PMO, Dirección y Héctor (public.ve_reporte_diario()).
+// menos de lo que le tocaba. Lo ven solo quienes tienen ve_reporte_diario en el Directorio (public.ve_reporte_diario()).
 // Le tocaba = 8 h en día hábil; 0 en fin de semana, festivo (de ley o del calendario BEA) o con ausencia aprobada.
 import { supabase } from './supabase'
 import { cargarRegistros, duracionMs, esIndirecto, H } from './track'

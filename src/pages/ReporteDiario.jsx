@@ -100,7 +100,7 @@ export default function ReporteDiario() {
   const r = useMemo(() => (datos ? calcularDia(datos) : null), [datos])
 
   if (permiso === null) return <div className="main"><div className="spinner" /></div>
-  if (!permiso) return <div className="main"><div className="empty-state"><h3>Reporte diario</h3><p>Solo lo ven PMO, Dirección y quien tenga el permiso en el Directorio.</p></div></div>
+  if (!permiso) return <div className="main"><div className="empty-state"><h3>Reporte diario</h3><p>Solo lo ven quienes tienen el permiso de reporte diario en el Directorio.</p></div></div>
 
   const t = r?.totales
   const areaSel = r && (r.areas.find(a => a.area === area) || r.areas[0])

@@ -1,8 +1,8 @@
--- Reporte diario de Track (nov 2026): lo ven solo PMO, Dirección (CEO) y Héctor.
--- Se marca por persona en el Directorio (ve_reporte_diario); de arranque: todo Dirección / PMO activo y Héctor.
+-- Reporte diario de Track (nov 2026): lo ven solo Adriana Trejo, Gerardo Marcos, Ulises Treviño y Héctor González.
+-- Se marca por persona en el Directorio (ve_reporte_diario).
 alter table directorio add column if not exists ve_reporte_diario boolean not null default false;
-update directorio set ve_reporte_diario = true
- where activo and (area = 'Dirección / PMO' or lower(email) = 'hgonzalez@bioconstruccion.com.mx');
+update directorio set ve_reporte_diario = (lower(email) in (
+  'atrejo@bioconstruccion.com.mx', 'pmanagement@bioconstruccion.com.mx', 'utrevino@bioconstruccion.com.mx', 'hgonzalez@bioconstruccion.com.mx'));
 
 create or replace function public.ve_reporte_diario()
 returns boolean language sql security definer stable set search_path = public as $$
