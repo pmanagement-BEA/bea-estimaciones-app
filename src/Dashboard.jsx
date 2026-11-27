@@ -77,7 +77,7 @@ export default function Dashboard() {
               : `Resumen de tus proyectos · ${projects.length} asignados`}
           </div>
         </div>
-        <button className="btn btn-outline" onClick={() => navigate('/')}>← Mis Proyectos</button>
+        <button className="btn btn-outline" onClick={() => navigate('/proyectos')}>← Mis Proyectos</button>
       </div>
 
       {/* KPIs */}

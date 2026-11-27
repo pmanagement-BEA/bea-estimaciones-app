@@ -424,7 +424,7 @@ export default function Proyecciones() {
   return (
     <div className="main">
       <div className="breadcrumb">
-        <a onClick={() => navigate('/')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Proyecciones</span>
+        <a onClick={() => navigate('/proyectos')}>Mis Proyectos</a><span className="sep">›</span><span className="current">Proyecciones</span>
       </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <div>

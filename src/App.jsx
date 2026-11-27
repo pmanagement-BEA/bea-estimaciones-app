@@ -8,6 +8,7 @@ import TopBar from './components/TopBar'
 import Toast from './components/Toast'
 import Login from './pages/Login'
 import Projects from './pages/Projects'
+import Inicio from './pages/Inicio'
 import ProjectSetup from './pages/ProjectSetup'
 import Estimation from './pages/Estimation'
 import History from './pages/History'
@@ -48,7 +49,8 @@ export default function App() {
       <VersionNueva />
       <Routes>
         <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/" element={<PrivateRoute><Projects /></PrivateRoute>} />
+        <Route path="/" element={<PrivateRoute><Inicio /></PrivateRoute>} />
+        <Route path="/proyectos" element={<PrivateRoute><Projects /></PrivateRoute>} />
         <Route path="/projects/:id/setup" element={<PrivateRoute><ProjectSetup /></PrivateRoute>} />
         <Route path="/projects/:id/estimations/:estId" element={<PrivateRoute><Estimation /></PrivateRoute>} />
         <Route path="/projects/:id/history" element={<PrivateRoute><History /></PrivateRoute>} />
