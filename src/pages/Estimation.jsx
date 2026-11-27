@@ -25,6 +25,12 @@ import LogoCliente, { leerLogoCliente } from '../components/LogoCliente'
 const CAMPOS_HEREDADOS = ['acciones_pendientes', 'informacion_pendiente', 'riesgos', 'no_riesgos', 'entregables', 'resumen_proyecto',
   'fase_texto', 'estado_proyecto', 'inicio_fase', 'fin_fase', 'inicio_contrato', 'fin_contrato', 'avance_documental', 'cliente_responsable', 'nota_info_pendiente']
 
+// Áreas que llevan reporte mensual: las que tienen disciplinas en el contrato (si no se distingue ninguna, las 3)
+function areasDelReporte(discs) {
+  const hay = AREAS_REPORTE.map(([a]) => a).filter(a => (discs || []).some(d => disciplineArea(d) === a))
+  return hay.length ? hay : AREAS_REPORTE.map(([a]) => a)
+}
+
 const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -74,9 +80,9 @@ export default function Estimation() {
   // Al abrir la hoja para cliente se precarga ExcelJS: la descarga sale al instante
   useEffect(() => { if (activeTab === 'cliente') cargarExcelJS().catch(() => {}) }, [activeTab])
   const [modal, setModal]             = useState(null)
-  const [reportData, setReportData]   = useState(null)
+  const [reportes, setReportes]       = useState({}) // reporte mensual de cada área: { Consultoría: {...}, Commissioning: {...}, Modelación: {...} }
+  const [areaRpt, setAreaRpt]         = useState(null) // área cuyo reporte se está viendo
   const [reportSaving, setReportSaving] = useState(false)
-  const [reportHeredado, setReportHeredado] = useState(null) // número de la estimación de la que se copió
   const [equipo, setEquipo]           = useState({})
   const [togglModal, setTogglModal]   = useState(null) // { rows: [] }
   const [areaStatus, setAreaStatus]   = useState({}) // { area: { listo_por, listo_nombre, listo_at } }
@@ -91,7 +97,10 @@ export default function Estimation() {
   const pendientes      = useRef({}) // { concept_id: item } aún sin guardar
   const [proyectados, setProyectados] = useState({ ids: new Set(), lista: [], libres: new Set(), pendientes: new Set() })
   const reportSaveTimer = useRef(null)
-  const reportInsert    = useRef(null)
+  const reportInsert    = useRef({}) // por área: el primer guardado (insert) en curso
+  const reportesRef     = useRef({})
+  const areaRef         = useRef(null)
+  const areaElegida     = useRef(false) // la persona ya escogió área a mano
   const reportRef       = useRef(null)
   const togglFileRef    = useRef(null)
 
@@ -100,6 +109,13 @@ export default function Estimation() {
   useEffect(() => {
     if (project?.id && profile?.id) permisosProyecto(project, profile).then(setPerms)
   }, [project?.id, profile?.id, profile?.role])
+
+  // Reporte mensual: arranca en el área de la persona (mientras no escoja otra a mano)
+  useEffect(() => {
+    if (!disciplines.length || areaElegida.current) return
+    const aplican = areasDelReporte(disciplines)
+    cambiarAreaRpt(aplican.find(a => perms.areas?.has(a)) || aplican[0])
+  }, [disciplines, perms]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Carga ──────────────────────────────────────────────────────────────────
   async function fetchAll() {
@@ -193,24 +209,31 @@ export default function Estimation() {
     }
     setProyectados(infoProyectados)
 
-    const rdRes = await supabase.from('report_data').select('*').eq('estimation_id', est.id).maybeSingle()
-    let rd = rdRes.data || null
-    let heredado = null
-    if (!rd) {
-      // Reporte nuevo: arranca con lo que sigue vigente del reporte anterior (lo realizado sí empieza vacío)
-      const previa = allEsts.filter(e => e.number < est.number).sort((a, b) => b.number - a.number)
-      if (previa.length) {
-        const { data: prev } = await supabase.from('report_data').select('*').in('estimation_id', previa.slice(0, 3).map(e => e.id))
-        const base = previa.map(e => (prev || []).find(r => r.estimation_id === e.id)).find(Boolean)
-        if (base) {
-          heredado = previa.find(e => e.id === base.estimation_id).number
-          rd = Object.fromEntries(CAMPOS_HEREDADOS.map(k => [k, base[k]]).filter(([, v]) => v != null))
-        }
-      }
+    // Reporte mensual: uno por área. Si el área aún no tiene el suyo, arranca con lo que sigue vigente:
+    // del reporte general de esta misma estimación (de antes de separar por área) o del último reporte anterior.
+    const { data: rdRows } = await supabase.from('report_data').select('*').eq('estimation_id', est.id)
+    const general = (rdRows || []).find(r => !r.area) || null
+    const previa = allEsts.filter(e => e.number < est.number).sort((a, b) => b.number - a.number).slice(0, 3)
+    let prevRows = []
+    if (previa.length) {
+      const { data: prev } = await supabase.from('report_data').select('*').in('estimation_id', previa.map(e => e.id))
+      prevRows = prev || []
     }
-    setReportHeredado(heredado)
-    setReportData(rd)
-    reportRef.current = rd
+    const tomar = base => Object.fromEntries(CAMPOS_HEREDADOS.map(k => [k, base[k]]).filter(([, v]) => v != null))
+    const porArea = {}
+    for (const [a] of AREAS_REPORTE) {
+      const propio = (rdRows || []).find(r => r.area === a)
+      if (propio) { porArea[a] = propio; continue }
+      if (general) {
+        porArea[a] = { area: a, ...tomar(general), acciones_realizadas: (general.acciones_realizadas || []).filter(x => (x.area || 'Consultoría') === a), _heredado: 'general' }
+        continue
+      }
+      const base = previa.map(e => prevRows.find(r => r.estimation_id === e.id && r.area === a) || prevRows.find(r => r.estimation_id === e.id && !r.area)).find(Boolean)
+      porArea[a] = base ? { area: a, ...tomar(base), _heredado: previa.find(e => e.id === base.estimation_id).number } : { area: a }
+    }
+    reportesRef.current = porArea
+    setReportes(porArea)
+    if (areaRef.current) reportRef.current = porArea[areaRef.current]
 
     const [dir, mem] = await Promise.all([fetchDirectorio(), fetchProjectMembers(id)])
     const nombre = rol => {
@@ -350,40 +373,67 @@ export default function Estimation() {
   }
 
   // ── Report helpers ─────────────────────────────────────────────────────────
+  // Guarda el reporte de un área en memoria (y el que se ve, si es esa área)
+  function ponerReporte(next) {
+    reportesRef.current = { ...reportesRef.current, [next.area]: next }
+    setReportes(reportesRef.current)
+    if (next.area === areaRef.current) reportRef.current = next
+  }
+
   function scheduleReportSave(updates) {
-    const next = { ...(reportRef.current || {}), ...updates }
-    setReportData(next)
-    reportRef.current = next
+    const actual = reportRef.current || { area: areaRef.current }
+    const tocaListo = 'listo' in updates
+    const next = { ...actual, ...updates, ...(!tocaListo && actual.listo ? { listo: false, listo_por: '', listo_en: null } : {}) }
+    if (!tocaListo && actual.listo) toast(`El reporte de ${ETIQUETA_AREA[next.area]} vuelve a captura porque lo cambiaste`)
+    ponerReporte(next)
     clearTimeout(reportSaveTimer.current)
-    reportSaveTimer.current = setTimeout(() => flushReportSave(next), 600)
+    reportSaveTimer.current = setTimeout(() => { reportSaveTimer.current = null; flushReportSave(next) }, 600)
+  }
+
+  // Cambiar de área: lo que estaba esperando su turno se guarda ya
+  function cambiarAreaRpt(a, aMano = false) {
+    if (aMano) areaElegida.current = true
+    if (a === areaRef.current) return
+    if (reportSaveTimer.current) { clearTimeout(reportSaveTimer.current); reportSaveTimer.current = null; if (reportRef.current) flushReportSave(reportRef.current) }
+    areaRef.current = a
+    reportRef.current = reportesRef.current[a] || { area: a }
+    setAreaRpt(a)
   }
 
   async function flushReportSave(data) {
+    const a = data.area
     setReportSaving(true)
-    // Si el primer guardado (insert) sigue en curso, espera a que termine para no crear dos reportes
-    if (!data.id && reportInsert.current) { await reportInsert.current; data = { ...data, id: reportRef.current?.id } }
+    // Si el primer guardado (insert) de esa área sigue en curso, espera a que termine para no crear dos reportes
+    if (!data.id && reportInsert.current[a]) { await reportInsert.current[a]; data = { ...data, id: reportesRef.current[a]?.id } }
+    const limpio = Object.fromEntries(Object.entries(data).filter(([k]) => !k.startsWith('_')))
     if (data.id) {
-      const { error } = await supabase.from('report_data').update(data).eq('id', data.id)
+      const { error } = await supabase.from('report_data').update(limpio).eq('id', data.id)
       if (error) toast('No se guardó el reporte: ' + error.message, true)
     } else {
-      reportInsert.current = supabase.from('report_data')
-        .insert({ estimation_id: estimation.id, ...data }).select('id').single()
-      const { data: created, error } = await reportInsert.current
-      reportInsert.current = null
+      reportInsert.current[a] = supabase.from('report_data')
+        .insert({ estimation_id: estimation.id, ...limpio }).select('id').single()
+      const { data: created, error } = await reportInsert.current[a]
+      reportInsert.current[a] = null
       if (error) toast('No se guardó el reporte: ' + error.message, true)
       if (created) {
         // Conserva lo que se haya escrito mientras se guardaba
-        reportRef.current = { ...(reportRef.current || {}), id: created.id }
-        setReportData(reportRef.current)
-        setReportHeredado(null)
+        const { _heredado, ...resto } = reportesRef.current[a] || { area: a }
+        ponerReporte({ ...resto, id: created.id })
       }
     }
     setReportSaving(false)
   }
 
+  function marcarReporteListo(listo) {
+    scheduleReportSave(listo
+      ? { listo: true, listo_por: profile?.nombre || profile?.email || '', listo_en: new Date().toISOString() }
+      : { listo: false, listo_por: '', listo_en: null })
+    toast(listo ? `Reporte de ${ETIQUETA_AREA[areaRef.current]} listo ✓` : 'Reporte de vuelta en captura')
+  }
+
   function addReportRow(key) {
     const defaults = {
-      acciones_realizadas:   { task: '', descripcion: '', fecha: '', area: areaPropia() },
+      acciones_realizadas:   { task: '', descripcion: '', fecha: '', area: areaRef.current || areaPropia() },
       acciones_pendientes:   { accion: '', fecha: '', responsable: 'BEA' },
       informacion_pendiente: { texto: '', responsable: 'BEA' },
       riesgos:               { riesgo: '', creditos: '' },
@@ -483,7 +533,7 @@ export default function Estimation() {
     })
     const newRows = []
     taskMap.forEach((descs, task) => {
-      newRows.push({ id: crypto.randomUUID(), task, descripcion: descs.join('\n'), fecha: '', area: areaPropia() })
+      newRows.push({ id: crypto.randomUUID(), task, descripcion: descs.join('\n'), fecha: '', area: areaRef.current || areaPropia() })
     })
     const existing = (reportRef.current?.acciones_realizadas || []).filter(r => (r.task || '').trim())
     scheduleReportSave({ acciones_realizadas: [...existing, ...newRows] })
@@ -1019,11 +1069,11 @@ export default function Estimation() {
             })}
           </div>
 
-          {/* Botón continuar */}
-          {!readonly && (
+          {/* Botón continuar (el reporte mensual lo capturan todos) */}
+          {(
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }} className="no-print">
-              <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={() => { toast('Borrador guardado ✓'); setActiveTab('report') }}>
-                Guardar y continuar → Reporte Mensual
+              <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={() => { if (!readonly) toast('Borrador guardado ✓'); setActiveTab('report') }}>
+                {readonly ? 'Ir al Reporte Mensual →' : 'Guardar y continuar → Reporte Mensual'}
               </button>
             </div>
           )}
@@ -1067,8 +1117,14 @@ export default function Estimation() {
       )}
 
       {activeTab === 'report' && (() => {
-        const rpt = reportData || {}
-        const reportReadonly = estimation.report_sent === true || soloLectura
+        const rpt = (areaRpt && reportes[areaRpt]) || { area: areaRpt }
+        // Todos capturan el reporte mensual (no solo los asignados al proyecto); solo el rol de lectura lo ve sin editar
+        const reportReadonly = estimation.report_sent === true || isReadOnlyRole(profile)
+        const reportHeredado = rpt._heredado
+        const areasRpt = areasDelReporte(disciplines)
+        const estadoRpt = a => (reportes[a]?.listo ? 'listo' : reportes[a]?.id ? 'captura' : 'vacio')
+        const listos = areasRpt.filter(a => estadoRpt(a) === 'listo')
+        const todosListos = listos.length === areasRpt.length
         const rd = key => rpt[key] || []
         const mesRpt = mesDelPeriodo(estimation.period_from, estimation.period_to)
         const mesReporteTxt = mesRpt ? `${MESES[Number(mesRpt.slice(5, 7)) - 1]} ${mesRpt.slice(0, 4)}` : '—'
@@ -1076,18 +1132,57 @@ export default function Estimation() {
         const ordenArea = Object.fromEntries(AREAS_REPORTE.map(([a], i) => [a, i]))
         const accionesOrdenadas = rd('acciones_realizadas').map((r, i) => [r, i])
           .sort((x, y) => (ordenArea[x[0].area || 'Consultoría'] - ordenArea[y[0].area || 'Consultoría']) || x[1] - y[1]).map(x => x[0])
+        const excelDeArea = async (a, logoCliente) => {
+          const r = reportes[a] || { area: a }
+          await descargarReporteExcel({
+            proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, periodTo: estimation.period_to, equipo,
+            area: a, logoCliente,
+            rpt: { ...r, inicio_contrato: r.inicio_contrato || project.start_date, fin_contrato: r.fin_contrato || project.end_date },
+          })
+        }
         const bajarReporteExcel = async () => {
+          try { await excelDeArea(areaRpt, await leerLogoCliente(project)) } catch (err) { toast('No se pudo generar el Excel: ' + err.message, true) }
+        }
+        const bajarLosReportes = async () => {
           try {
-            await descargarReporteExcel({
-              proyecto: project.name, cliente: project.client, numero: estimation.number, periodFrom: estimation.period_from, periodTo: estimation.period_to, equipo,
-              logoCliente: await leerLogoCliente(project),
-              rpt: { ...rpt, inicio_contrato: rpt.inicio_contrato || project.start_date, fin_contrato: rpt.fin_contrato || project.end_date },
-            })
+            const logo = await leerLogoCliente(project)
+            for (const a of areasRpt) { await excelDeArea(a, logo); await new Promise(r => setTimeout(r, 400)) }
+            toast(`${areasRpt.length} reportes descargados ✓`)
           } catch (err) { toast('No se pudo generar el Excel: ' + err.message, true) }
         }
 
         return (
           <div className={reportReadonly ? 'readonly' : ''}>
+
+            {/* Un reporte por área; el líder descarga todos cuando están listos */}
+            <div className="card mb-md no-print rpt-areas">
+              <div className="rpt-areas-cab">
+                <div>
+                  <div className="section-title">Reporte mensual por área</div>
+                  <div className="rpt-areas-sub">Cada área llena el suyo y lo marca como listo. {areasRpt.length > 1 ? `El líder descarga los ${areasRpt.length} cuando estén listos.` : ''}</div>
+                </div>
+                {perms.todo && areasRpt.length > 1 && (
+                  <div className="rpt-lider">
+                    <span>{listos.length} de {areasRpt.length} listos</span>
+                    <button className="btn btn-primary btn-sm" disabled={!todosListos} onClick={bajarLosReportes}
+                      title={todosListos ? 'Descarga el Excel RC-OP-01 de cada área' : `Falta: ${areasRpt.filter(a => estadoRpt(a) !== 'listo').map(a => ETIQUETA_AREA[a]).join(', ')}`}>
+                      ⬇ Descargar los {areasRpt.length}
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="rpt-areas-fila" role="tablist">
+                {areasRpt.map(a => {
+                  const e = estadoRpt(a)
+                  return (
+                    <button key={a} role="tab" aria-selected={areaRpt === a} className={`rpt-area ${e}${areaRpt === a ? ' sel' : ''}`} onClick={() => cambiarAreaRpt(a, true)}>
+                      <span className="nom">{ETIQUETA_AREA[a]}</span>
+                      <span className="est">{e === 'listo' ? `✓ Listo${reportes[a]?.listo_por ? ` · ${reportes[a].listo_por}` : ''}` : e === 'captura' ? 'En captura' : 'Sin empezar'}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* Banner enviado */}
             {reportReadonly && (
@@ -1102,7 +1197,9 @@ export default function Estimation() {
 
             {reportHeredado && !reportReadonly && (
               <div className="readonly-banner no-print" style={{ background: '#EFF6FF', color: '#1D4ED8', borderColor: '#BFDBFE' }}>
-                <span>Se copió del reporte de la estimación #{String(reportHeredado).padStart(3, '0')} lo que sigue vigente: encabezado, pendientes, información pendiente, riesgos, entregables y resumen. Revísalo y actualízalo; las acciones del mes empiezan vacías.</span>
+                <span>{reportHeredado === 'general'
+                  ? `Este reporte arrancó con lo que ya se había capturado en el reporte general de esta estimación (encabezado, pendientes, riesgos, entregables y las acciones de ${ETIQUETA_AREA[areaRpt]}). Deja solo lo de tu área.`
+                  : `Se copió del reporte de la estimación #${String(reportHeredado).padStart(3, '0')} lo que sigue vigente: encabezado, pendientes, información pendiente, riesgos, entregables y resumen. Revísalo, deja solo lo de ${ETIQUETA_AREA[areaRpt]} y actualízalo; las acciones del mes empiezan vacías.`}</span>
               </div>
             )}
 
@@ -1114,6 +1211,7 @@ export default function Estimation() {
                 <div className="field"><label>Cliente</label><input value={project.client} disabled /></div>
                 <div className="field"><label>Ubicación</label><input value={project.location || '—'} disabled /></div>
                 <div className="field"><label>Mes</label><input value={mesReporteTxt} disabled /></div>
+                <div className="field"><label>Área del reporte</label><input value={ETIQUETA_AREA[areaRpt] || '—'} disabled /></div>
                 <div className="field"><label>Estimación</label><input value={`#${String(estimation.number).padStart(3, '0')}`} disabled /></div>
                 <div className="field"><label>% global de avance documental</label>
                   <input type="number" min="0" max="100" step="0.1" value={rpt.avance_documental ?? ''} readOnly={reportReadonly} placeholder="0 – 100"
@@ -1178,11 +1276,7 @@ export default function Estimation() {
                           <tr key={row.id}>
                             <td className="row-num">{i + 1}</td>
                             <td>
-                              {reportReadonly
-                                ? <span style={{ fontSize: 12 }}>{ETIQUETA_AREA[row.area || 'Consultoría']}</span>
-                                : <select value={row.area || 'Consultoría'} onChange={e => updateReportRow('acciones_realizadas', row.id, 'area', e.target.value)}>
-                                    {AREAS_REPORTE.map(([a]) => <option key={a} value={a}>{ETIQUETA_AREA[a]}</option>)}
-                                  </select>}
+                              <span style={{ fontSize: 12 }}>{ETIQUETA_AREA[row.area || areaRpt || 'Consultoría']}</span>
                             </td>
                             <td><input value={row.task || ''} readOnly={reportReadonly} onChange={e => updateReportRow('acciones_realizadas', row.id, 'task', e.target.value)} /></td>
                             <td>
@@ -1398,11 +1492,14 @@ export default function Estimation() {
                   <button className="btn btn-outline" onClick={() => toast('Borrador guardado ✓')}>Guardar borrador</button>
                   <button className="btn btn-outline" onClick={bajarReporteExcel}>⬇ Excel RC-OP-01</button>
                   <button className="btn btn-dark" onClick={() => window.print()}>📄 Generar PDF</button>
-                  <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={() => setModal({
+                  {rpt.listo
+                    ? <button className="btn btn-outline" onClick={() => marcarReporteListo(false)}>↩ Regresar a captura</button>
+                    : <button className="btn btn-primary" onClick={() => marcarReporteListo(true)}>✓ Marcar {ETIQUETA_AREA[areaRpt]} como listo</button>}
+                  {perms.todo && <button className="btn btn-primary" style={{ fontSize: 14, padding: '10px 24px' }} onClick={() => setModal({
                     title: '✉ Marcar Reporte como Enviado',
                     body: '<p>Una vez marcado como <strong>Enviado</strong>, el reporte no podrá editarse.</p><p style="margin-top:8px;color:var(--text-muted)">¿Confirmas que deseas marcarlo como Enviado?</p>',
                     onConfirm: markReportSent,
-                  })}>✉ Marcar como Enviado</button>
+                  })}>✉ Marcar como Enviado</button>}
                 </div>
               </div>
             )}
