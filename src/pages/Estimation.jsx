@@ -14,7 +14,7 @@ import { nombreBreve } from '../lib/estimacionBreve'
 import { cargarExcelJS } from '../lib/cargarModulo'
 import { conceptosPorEstimar } from '../lib/proyecciones'
 import FormatosCliente, { avanzarFormatos } from '../components/FormatosCliente'
-import { nextNumber } from '../utils/aditivas'
+import { nextNumber, aditivaLabel } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole, fetchDirectorio, fetchProjectMembers } from '../lib/directorio'
 import { useAjeno, AVISO_AJENO } from '../hooks/useAjeno'
@@ -58,7 +58,7 @@ function monthOptions(mes, startDate, endDate) {
 // ── Componente principal ─────────────────────────────────────────────────────
 export default function Estimation() {
   const { id, estId } = useParams()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { profile } = useAuth()
   const navigate = useNavigate()
 
@@ -265,6 +265,22 @@ export default function Estimation() {
       upsertItem(estimation.id, conceptId, itemWithAmount)
     }, 500)
   }, [estimation?.id, project, disciplines])
+
+  // Viene de aceptar una aditiva (?aditiva=NNN): marca sus conceptos en este borrador, una sola vez
+  const aditivaPedida = searchParams.get('aditiva')
+  const aditivaHecha = useRef(null)
+  useEffect(() => {
+    if (loading || !aditivaPedida || !estimation || aditivaHecha.current === aditivaPedida) return
+    aditivaHecha.current = aditivaPedida
+    setSearchParams({}, { replace: true })
+    if (estimation.status !== 'Borrador') { toast('Esta estimación ya se envió: la aditiva queda para la siguiente', true); return }
+    const label = aditivaLabel(aditivaPedida)
+    const disc = disciplines.find(d => (d.name || '').startsWith(label))
+    if (!disc) { toast(`No encontré ${label} en el contrato`, true); return }
+    const nuevos = disc.concepts.filter(c => !items[c.id]?.included)
+    for (const c of nuevos) scheduleItemSave(c.id, { ...items[c.id], included: true }, disc, c)
+    toast(nuevos.length ? `${label} agregada a la estimación: ${nuevos.length} ${nuevos.length === 1 ? 'concepto' : 'conceptos'} ✓` : `${label} ya estaba en la estimación`)
+  }, [loading, aditivaPedida, estimation, disciplines, items, scheduleItemSave, setSearchParams])
 
   // Guarda ya lo que esté esperando su turno (antes de enviar, marcar área o salir)
   async function guardarPendientes() {

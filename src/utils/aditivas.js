@@ -20,7 +20,7 @@ export async function incorporarAditivaAlContrato(projectId, aditiva, alcances) 
   const { data: discs, error } = await supabase
     .from('disciplines').select('id, name, sort_order').eq('project_id', projectId)
   if (error) return { error }
-  if ((discs || []).some(d => (d.name || '').startsWith(label))) return { skipped: true }
+  if ((discs || []).some(d => (d.name || '').startsWith(label))) return { skipped: true, yaEnContrato: true }
 
   const rows = (alcances || []).filter(al => (parseFloat(al.monto) || 0) > 0 || (al.descripcion || '').trim())
   const total = rows.reduce((s, al) => s + (parseFloat(al.monto) || 0), 0)
@@ -53,3 +53,6 @@ export async function incorporarAditivaAlContrato(projectId, aditiva, alcances) 
   if (concErr) return { error: concErr }
   return { added: true, total }
 }
+
+/** Ruta para agregar los conceptos de una aditiva ya aceptada al borrador de estimación en turno. */
+export const rutaAditivaAEstimacion = (projectId, number) => `/projects/${projectId}/estimations/current?crear=1&aditiva=${number}`
