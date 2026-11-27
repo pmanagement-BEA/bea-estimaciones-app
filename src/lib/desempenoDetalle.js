@@ -34,8 +34,8 @@ export async function cargarActividadesHoras(tpIds) {
  * datos: lo de cargarDesempeno (projects, tps, historico, registros, directorio, presupuesto, mes)
  * opciones: { tpId, projectId, email }  — email: solo las horas de esa persona en conceptos y personas
  */
-export function detalleProyecto(datos, { tpId, projectId, email } = {}) {
-  const { projects, tps, historico, registros, directorio, presupuesto = [], mes } = datos
+export function detalleProyecto(datos, { tpId, projectId, email, meses } = {}) {
+  const { projects, tps, historico, registros, directorio, presupuesto = [], historicoAct = [], mes } = datos
   const tp = tpId != null ? tps.find(t => String(t.id) === String(tpId)) : null
   const proyecto = projectId ? projects.find(p => p.id === projectId) : tp?.project_id ? projects.find(p => p.id === tp.project_id) : null
   const clave = claveDe(proyecto?.name || tp?.nombre)
@@ -80,6 +80,20 @@ export function detalleProyecto(datos, { tpId, projectId, email } = {}) {
     const x = (enTrack[k] ||= { k, conceptoId: r.concepto_id || null, actividadId: r.actividad_id || null, descripcion: (r.descripcion || '').trim(), horas: 0, mes: 0, registros: 0 })
     x.horas += h; x.registros++; if (mesDe(r) === mes) x.mes += h
   }
+
+  // ── Toggl actividad por actividad (de la persona si hay email), en los meses pedidos
+  const enMeses = m => !meses || meses.includes(m)
+  const deEllaToggl = e => !email || lower(e) === lower(email)
+  const toggl = {}
+  for (const r of historicoAct) {
+    const a = r.track_actividades
+    if (!a || !tpIds.has(String(a.proyecto_id)) || !enMeses(r.mes) || !deEllaToggl(r.email)) continue
+    const x = (toggl[r.actividad_id] ||= { actividadId: r.actividad_id, nombre: a.nombre, horas: 0 })
+    x.horas += (+r.segundos || 0) / 3600
+  }
+  let horasTogglPeriodo = 0
+  for (const r of historico) if (tpIds.has(String(r.proyecto_id)) && enMeses(r.mes) && deEllaToggl(r.email)) horasTogglPeriodo += (+r.segundos || 0) / 3600
+  const togglAct = Object.values(toggl).filter(x => x.horas > 0.01).sort((a, b) => b.horas - a.horas)
 
   // ── Dinero por área (todos los proyectos de la clave, como el RC-OP-43)
   const dinero = Object.fromEntries(AREAS.map(a => [a, { contratado: 0, cobrado: 0 }]))
@@ -144,7 +158,7 @@ export function detalleProyecto(datos, { tpId, projectId, email } = {}) {
 
   return {
     clave, titulo, proyecto, tp, moneda, areas, conceptos, baseMes, tieneRcOp43: Object.keys(pres).length > 0,
-    horasSinArea, generales, sinConcepto, enTrack: Object.values(enTrack).sort((a, b) => b.horas - a.horas), horasConcepto: Object.values(porConcepto).reduce((a, b) => a + b, 0),
+    horasSinArea, generales, sinConcepto, togglAct, horasTogglPeriodo, enTrack: Object.values(enTrack).sort((a, b) => b.horas - a.horas), horasConcepto: Object.values(porConcepto).reduce((a, b) => a + b, 0),
     personas: Object.values(personas).filter(x => x.total > 0.05).sort((a, b) => b.mes - a.mes || b.total - a.total),
     tpIds: [...tpIds], varios: deLaClave.length > 1,
   }

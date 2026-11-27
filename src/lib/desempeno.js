@@ -34,7 +34,7 @@ export async function cargarDesempeno(mes) {
   const desde = sumarMeses(mes, -(MESES_TENDENCIA - 1))
   const finMes = sumarMeses(mes, 1) + '-01'
   const ultimoDia = new Date(new Date(finMes + 'T12:00:00').getTime() - 86400000).toISOString().slice(0, 10)
-  const [proj, proy, miembros, dir, tps, hist, regs, presupuesto] = await Promise.all([
+  const [proj, proy, miembros, dir, tps, hist, regs, presupuesto, historicoAct] = await Promise.all([
     supabase.from('projects').select('*, disciplines (*, concepts(*)), estimations (*, estimation_items(*))'),
     todas(() => supabase.from('proyecciones').select('id, project_id, mes, area, monto, tbd, concept_id')),
     supabase.from('project_members').select('project_id, rol, email'),
@@ -43,9 +43,11 @@ export async function cargarDesempeno(mes) {
     cargarHistorico({ mesDesde: desde, mesHasta: mes }).catch(() => []),
     cargarRegistros({ desde: desde + '-01', hasta: ultimoDia }).catch(() => []),
     cargarPresupuestoHH(),
+    // Histórico de Toggl por actividad (persona · actividad · mes); si la tabla no existe, vacío
+    todas(() => supabase.from('track_historico_act').select('mes, actividad_id, email, segundos, track_actividades(proyecto_id, nombre)').gte('mes', desde).lte('mes', mes)).catch(() => []),
   ])
   for (const r of [proj, miembros, dir]) if (r.error) throw r.error
-  return { mes, projects: proj.data || [], proyecciones: proy, miembros: miembros.data || [], directorio: dir.data || [], tps, historico: hist, registros: regs, presupuesto }
+  return { mes, projects: proj.data || [], proyecciones: proy, miembros: miembros.data || [], directorio: dir.data || [], tps, historico: hist, registros: regs, presupuesto, historicoAct }
 }
 
 // Suma de dinero por moneda: { MXN: n, USD: n }

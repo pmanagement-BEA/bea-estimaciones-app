@@ -211,7 +211,8 @@ export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar, pes
  */
 export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }) {
   const datos = useContext(DatosDesempeno)
-  const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId, email }) : null), [datos, tpId, email])
+  const clavMeses = meses.join(',')
+  const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId, email, meses: clavMeses ? clavMeses.split(',') : undefined }) : null), [datos, tpId, email, clavMeses])
   const [todos, setTodos] = useState(false)
   const [nombres, setNombres] = useState({})
   const idsAct = (d?.enTrack || []).filter(x => x.actividadId && !x.conceptoId).map(x => String(x.actividadId)).join(',')
@@ -232,11 +233,13 @@ export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }
   const hConcepto = conHoras.reduce((a, c) => a + c.horas, 0)
   const cobConcepto = conHoras.reduce((a, c) => a + c.cobrado, 0)
   const hOtras = otras.reduce((a, x) => a + x.horas, 0)
-  const hToggl = Math.max(0, horasPeriodo - hConcepto - hOtras)
+  // Toggl: cada actividad con sus horas; lo que no trae actividad queda en un renglón aparte
+  const hTogglAct = d.togglAct.reduce((a, x) => a + x.horas, 0)
+  const hToggl = Math.max(0, d.horasTogglPeriodo - hTogglAct)
   const phReal = hConcepto > 0 && cobConcepto > 0 ? cobConcepto / hConcepto : null
   const planes = [...new Set(conHoras.map(c => planDe(c.area)).filter(Boolean))]
   const phPlan = planes.length === 1 ? planes[0] : null
-  const maxH = Math.max(1, ...conHoras.map(c => c.horas), ...otras.map(x => x.horas), hToggl)
+  const maxH = Math.max(1, ...conHoras.map(c => c.horas), ...otras.map(x => x.horas), ...d.togglAct.map(x => x.horas), hToggl)
 
   return (
     <div className="dsp-detalle">
@@ -278,14 +281,21 @@ export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }
             <span className="n sub">sin concepto</span><span className="n">—</span>
           </li>
         ))}
+        {d.togglAct.map(x => (
+          <li key={'t' + x.actividadId} className="toggl">
+            <span className="que" title={x.nombre}><span className="dsp-tag-t">Toggl</span>{x.nombre}</span>
+            <span className="h"><i style={{ width: `${x.horas / maxH * 90}px` }} />{hrs(x.horas, 1)}</span>
+            <span className="n sub">sin concepto</span><span className="n">—</span>
+          </li>
+        ))}
         {hToggl > 0.05 && (
           <li className="otra">
-            <span className="que" title="Horas de Toggl: solo traen el proyecto, no el concepto">Toggl (sin concepto)</span>
+            <span className="que" title="Horas de Toggl registradas sin actividad">Toggl sin actividad</span>
             <span className="h"><i style={{ width: `${hToggl / maxH * 90}px` }} />{hrs(hToggl, 1)}</span>
             <span className="n sub">—</span><span className="n">—</span>
           </li>
         )}
-        {!conHoras.length && !otras.length && hToggl <= 0.05 && <li className="otra"><span className="que sub">Sin horas en el periodo.</span></li>}
+        {!conHoras.length && !otras.length && !d.togglAct.length && hToggl <= 0.05 && <li className="otra"><span className="que sub">Sin horas en el periodo.</span></li>}
       </ul>
       {!conHoras.length && <p className="dsp-nota">Las horas por concepto aparecen cuando se registra en Track eligiendo el concepto del contrato.</p>}
 
