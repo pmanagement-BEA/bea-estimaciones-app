@@ -1261,9 +1261,3 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
   .bl-item{padding:2px}
 }
 @media print{ .barra-lat{display:none!important} .app-cuerpo{display:block} }
-
-/* Íconos en rosa (Inicio y barra lateral) */
-.inicio-tarjeta .inicio-icono{color:#FF9EC7 !important}
-.bl-grupo .bl-icono{color:#D63384 !important;background:rgba(214,51,132,.10) !important}
-:root[data-theme=dark] .bl-grupo .bl-icono{color:#FF9EC7 !important;background:rgba(255,158,199,.12) !important}
-.bl-grupo .bl-item.activa .bl-icono{background:#D63384 !important;color:#fff !important}
