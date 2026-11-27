@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import ReporteChecador from '../components/ReporteChecador'
+import { puedeVerReporteDiario } from '../lib/reporteDiario'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../hooks/useAuth'
@@ -351,6 +353,7 @@ export default function Checador() {
   const { profile } = useAuth()
   const email = (profile?.email || '').toLowerCase()
   const [admin, setAdmin] = useState(false)
+  const [veDiario, setVeDiario] = useState(false)
   const [params, setParams] = useSearchParams()
   const tab = params.get('tab') || 'mio'
   const setTab = t => setParams(t === 'mio' ? {} : { tab: t }, { replace: true })
@@ -369,7 +372,7 @@ export default function Checador() {
   }
   const contarSinVer = () => email && anunciosSinVer(email).then(setSinVer).catch(() => {})
   useEffect(() => { cargarCalendario(); recargarMotivos() }, [])
-  useEffect(() => { if (email) { supabase.rpc('es_admin_checador').then(({ data }) => setAdmin(!!data)); contarSinVer() } }, [email])
+  useEffect(() => { if (email) { supabase.rpc('es_admin_checador').then(({ data }) => setAdmin(!!data)); puedeVerReporteDiario().then(setVeDiario); contarSinVer() } }, [email])
   useEffect(() => { supabase.from('directorio').select('email, nombre, area, puesto, activo').then(({ data }) => setGente(data || [])) }, [])
 
   const nombres = useMemo(() => Object.fromEntries(gente.map(d => [d.email, d.nombre])), [gente])
@@ -379,12 +382,14 @@ export default function Checador() {
     ['mio', 'Mi checador', 'checar y ver mis horas'],
     ['ausencias', 'Ausencias', 'vacaciones y permisos'],
     ['anuncios', <>Anuncios{sinVer > 0 && <b className="badge-nuevo">{sinVer}</b>}</>, 'avisos de BEA'],
+    ...(veDiario ? [['reporte', 'Reporte', 'asistencia, faltas y retardos']] : []),
     ...(admin ? [['admin', '👥 Administrador', 'equipo, aprobaciones y ajustes']] : []),
   ]
 
   let contenido = null
   if (listo) {
     if (tab === 'ausencias') contenido = <MisAusencias email={email} motivos={motivos} nombres={nombres} />
+    else if (tab === 'reporte' && veDiario) contenido = <ReporteChecador />
     else if (tab === 'anuncios') contenido = <Anuncios email={email} admin={admin} nombres={nombres} personas={personas} alCambiarVistos={contarSinVer} />
     else if (tab === 'admin' && admin) contenido = (
       <>

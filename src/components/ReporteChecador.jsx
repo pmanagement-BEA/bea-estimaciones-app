@@ -3,6 +3,8 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { rangoPeriodo, cargarPeriodo, calcularPeriodo, minDelDia, TOLERANCIA_MIN } from '../lib/reporteChecador'
 import { textoHoras, textoDia, hhmm, HORARIO } from '../lib/checador'
 import { nombreCorto } from '../lib/proyecciones'
+import { diaHabilAnterior } from '../lib/reporteDiario'
+import BarraFecha from './BarraFecha'
 
 const COLOR = { 'Consultoría': '#0B3D24', 'Commissioning': '#4A1320', 'Modelación': '#0E1F3D', 'Dirección / PMO': '#3A3E45', 'Sin área': '#7B8794' }
 const h = ms => textoHoras(ms || 0)
@@ -82,7 +84,9 @@ function TablaPersonas({ personas, dia }) {
   )
 }
 
-export default function ReporteChecador({ fecha }) {
+/** Reporte del Checador (pestaña dentro de Checador; solo quien tiene ve_reporte_diario). El calendario BEA ya lo cargó la página. */
+export default function ReporteChecador() {
+  const [fecha, setFecha] = useState(() => diaHabilAnterior())
   const [tipo, setTipo] = useState('dia')
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
@@ -102,7 +106,8 @@ export default function ReporteChecador({ fecha }) {
   const conRetardos = r ? r.personas.filter(p => p.retardos.length).sort((a, b) => b.retardos.length - a.retardos.length) : []
 
   return (
-    <>
+    <div className="rd">
+      <BarraFecha fecha={fecha} setFecha={setFecha} onActualizar={cargar} />
       <div className="dsp-chips rc-periodo">
         {[['dia', 'Día'], ['semana', 'Semana'], ['mes', 'Mes']].map(([k, txt]) => <button key={k} className={tipo === k ? 'activa' : ''} onClick={() => setTipo(k)}>{txt}</button>)}
         <span className="sub">{desde === hasta ? textoDia(desde) : `${textoDia(desde)} – ${textoDia(hasta)}`} · retardo = entrada después de las {HORARIO.inicio} + {TOLERANCIA_MIN} min · salida esperada {HORARIO.fin}</span>
@@ -164,6 +169,6 @@ export default function ReporteChecador({ fecha }) {
           <p className="rd-nota">Falta = día hábil sin checar y sin ausencia aprobada (el día de hoy no cuenta). Horas y diferencia, como en el Checador: jornada de {HORARIO.horas} h.</p>
         </>
       )}
-    </>
+    </div>
   )
 }

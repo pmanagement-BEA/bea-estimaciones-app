@@ -1152,8 +1152,6 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 @media (max-width:640px){ .inicio{padding:28px 16px 40px;gap:24px} .inicio-cab h1{font-size:26px} .inicio-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px} .inicio-tarjeta{padding:20px 12px;gap:10px;border-radius:16px} .inicio-icono{width:52px;height:52px} .inicio-nombre{font-size:15px} .inicio-desc{font-size:12px} }
 /* Escritorio: 4 columnas fijas; Checador siempre en la última columna de la segunda fila (debajo de Track) */
 @media (min-width:900px){ .inicio-grid{grid-template-columns:repeat(4,minmax(0,1fr))} .inicio-tarjeta.s-checador{grid-column:4;grid-row:2} }
-/* Inicio: Reporte diario debajo del Checador */
-@media (min-width:900px){ .inicio-tarjeta.s-reporte-diario{grid-column:4;grid-row:3} }
 
 /* ── Reporte diario de Track ─────────────────────────────────────────────── */
 .rd .input{padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--text)}
@@ -1219,3 +1217,7 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .rc-dias li{display:grid;grid-template-columns:110px 70px 90px 90px 110px;gap:10px;padding:4px 0;border-top:1px solid var(--border);font-size:12.5px;font-variant-numeric:tabular-nums}
 .rc-dias .n{text-align:right}
 @media (max-width:700px){ .rc-lista li{grid-template-columns:1fr 1fr} .rc-lista li>.sub{display:none} .rc-dias li{grid-template-columns:90px 60px 70px 70px} .rc-dias li>:last-child{display:none} }
+
+.rd-barra-fecha{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 14px}
+.rd-dia{font-size:16px;font-weight:700;color:var(--text)}
+.rd-controles{display:flex;gap:6px;align-items:center;flex-wrap:wrap}

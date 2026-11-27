@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { puedeVerDesempeno } from '../lib/desempeno'
-import { puedeVerReporteDiario } from '../lib/reporteDiario'
 import { SECCIONES } from '../lib/secciones'
 
 /** Inicio: una tarjeta por sección (ícono, nombre y descripción), en el color de su grupo. */
@@ -10,9 +9,8 @@ export default function Inicio() {
   const navigate = useNavigate()
   const { profile } = useAuth()
   const [veDesempeno, setVeDesempeno] = useState(false)
-  const [veDiario, setVeDiario] = useState(false)
-  useEffect(() => { if (profile?.email) { puedeVerDesempeno().then(setVeDesempeno); puedeVerReporteDiario().then(setVeDiario) } }, [profile?.email])
-  const visibles = SECCIONES.filter(s => (!s.soloDesempeno || veDesempeno) && (!s.soloReporteDiario || veDiario))
+  useEffect(() => { if (profile?.email) puedeVerDesempeno().then(setVeDesempeno) }, [profile?.email])
+  const visibles = SECCIONES.filter(s => (!s.soloDesempeno || veDesempeno))
 
   return (
     <div className="inicio">

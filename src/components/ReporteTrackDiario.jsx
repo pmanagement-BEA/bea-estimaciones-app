@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { puedeVerReporteDiario, prepararCalendario, diaHabilAnterior, cargarDia, calcularDia } from '../lib/reporteDiario'
-import { textoHoras, textoDiaLargo, sumarDias, hhmm, diaIso, nombreDia } from '../lib/checador'
+import { prepararCalendario, diaHabilAnterior, cargarDia, calcularDia } from '../lib/reporteDiario'
+import { textoHoras, hhmm } from '../lib/checador'
 import { nombreCorto } from '../lib/proyecciones'
-import ReporteChecador from '../components/ReporteChecador'
+import BarraFecha from './BarraFecha'
 
 const COLOR = { 'Consultoría': '#0B3D24', 'Commissioning': '#4A1320', 'Modelación': '#0E1F3D', 'Dirección / PMO': '#3A3E45', 'Sin área': '#7B8794' }
 const h = ms => textoHoras(ms || 0)
@@ -78,22 +78,16 @@ function TablaPersonas({ personas }) {
   )
 }
 
-export default function ReporteDiario() {
-  const [permiso, setPermiso] = useState(null)
+/** Reporte diario de Track (pestaña dentro de Track; solo quien tiene ve_reporte_diario) */
+export default function ReporteTrackDiario() {
   const [listo, setListo] = useState(false)
   const [fecha, setFecha] = useState(null)
   const [datos, setDatos] = useState(null)
   const [error, setError] = useState('')
   const [vista, setVista] = useState('empresa')
   const [area, setArea] = useState(null)
-  const [fuente, setFuente] = useState(() => { try { return localStorage.getItem('rd_fuente') || 'track' } catch { return 'track' } })
-  useEffect(() => { try { localStorage.setItem('rd_fuente', fuente) } catch { /* sin almacenamiento */ } }, [fuente])
 
-  useEffect(() => { puedeVerReporteDiario().then(setPermiso) }, [])
-  useEffect(() => {
-    if (!permiso) return
-    prepararCalendario().then(() => { setFecha(diaHabilAnterior()); setListo(true) })
-  }, [permiso])
+  useEffect(() => { prepararCalendario().then(() => { setFecha(diaHabilAnterior()); setListo(true) }) }, [])
   const cargar = useCallback(async () => {
     if (!fecha) return
     setError(''); setDatos(null)
@@ -102,30 +96,11 @@ export default function ReporteDiario() {
   useEffect(() => { if (listo) cargar() }, [listo, cargar])
   const r = useMemo(() => (datos ? calcularDia(datos) : null), [datos])
 
-  if (permiso === null) return <div className="main"><div className="spinner" /></div>
-  if (!permiso) return <div className="main"><div className="empty-state"><h3>Reporte diario</h3><p>Solo lo ven quienes tienen el permiso de reporte diario en el Directorio.</p></div></div>
-
   const t = r?.totales
   const areaSel = r && (r.areas.find(a => a.area === area) || r.areas[0])
   return (
-    <div className="main rd">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Reporte <span className="accent">diario</span></h1>
-          <div className="page-subtitle">{fecha ? textoDiaLargo(fecha) : ''}{fecha && nombreDia(fecha) ? ` · ${nombreDia(fecha)}` : ''}</div>
-        </div>
-        <div className="flex rd-fecha" style={{ gap: 6, alignItems: 'center' }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setFecha(sumarDias(fecha, -1))} aria-label="Día anterior">‹</button>
-          <input type="date" className="input" value={fecha || ''} max={diaIso()} onChange={e => e.target.value && setFecha(e.target.value)} aria-label="Día del reporte" />
-          <button className="btn btn-outline btn-sm" onClick={() => setFecha(sumarDias(fecha, 1))} disabled={!fecha || fecha >= diaIso()} aria-label="Día siguiente">›</button>
-          <button className="btn btn-outline btn-sm" onClick={cargar}>Actualizar</button>
-        </div>
-      </div>
-
-      <div className="rd-fuente" role="tablist" aria-label="Qué reporte ver">
-        {[['track', 'Track · horas por proyecto'], ['checador', 'Checador · asistencia']].map(([k, txt]) => <button key={k} role="tab" aria-selected={fuente === k} className={fuente === k ? 'activa' : ''} onClick={() => setFuente(k)}>{txt}</button>)}
-      </div>
-      {fuente === 'checador' ? (fecha && <ReporteChecador fecha={fecha} />) : (<>
+    <div className="rd">
+      <BarraFecha fecha={fecha} setFecha={setFecha} onActualizar={cargar} />
       {error && <div className="card" style={{ color: '#C53030' }}>No se pudo cargar: {error}</div>}
       {!r ? <div className="spinner" /> : (
         <>
@@ -191,7 +166,6 @@ export default function ReporteDiario() {
           <p className="rd-nota">Le tocaba = 8 h en día hábil; 0 en fin de semana, festivo o con ausencia aprobada. Solo cuenta lo registrado en Track (lo de Toggl no llega por día).</p>
         </>
       )}
-      </>)}
     </div>
   )
 }
