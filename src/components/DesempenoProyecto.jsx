@@ -4,10 +4,14 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { fmtMoney } from '../utils/format'
 import { detalleProyecto, cargarActividadesHoras, nombresActividades } from '../lib/desempenoDetalle'
+import { ETIQUETA_METODO } from '../lib/mapeoActividades'
+import { supabase } from '../lib/supabase'
+import { toast } from './Toast'
 import { COLOR_AREA, textoMes, nombreCorto } from '../lib/proyecciones'
 import { num } from '../lib/track'
 
 export const DatosDesempeno = createContext(null)
+export const RecargaDesempeno = createContext(() => {})
 
 const ETQ = { 'Consultoría': 'CV', 'Commissioning': 'CX', 'Modelación': 'ME' }
 const dinero = (n, moneda = 'MXN') => (n == null || isNaN(n) ? '—' : fmtMoney(Math.round(n), moneda).replace(/\.00$/, ''))
@@ -209,11 +213,92 @@ export function ProyectoDetalle({ tpId, projectId, email, onAbrir, onCerrar, pes
  * Versión sencilla para la vista Individual: horas por concepto, cuánto se cobró y sus indicadores,
  * en una sola lista (conceptos del contrato + otras actividades + horas de Toggl sin concepto).
  */
+/** Texto del cuadro flotante: de dónde salen las horas de un concepto */
+function origenTexto(c) {
+  const l = []
+  if (c.horasTrack > 0.01) l.push(`Track: ${hrs(c.horasTrack, 1)}`)
+  for (const o of c.origenes.slice(0, 8)) l.push(`${o.nombre}: ${hrs(o.h, 1)} (${ETIQUETA_METODO[o.metodo] || o.metodo})`)
+  if (c.origenes.length > 8) l.push(`…y ${c.origenes.length - 8} actividades más`)
+  return l.join('\n')
+}
+
+const CONF = { alta: 'Alta', media: 'Media', baja: 'Baja', manual: 'Manual', ninguna: '—' }
+
+/** Cómo se ligó cada actividad de Toggl del proyecto (todo el equipo, últimos 12 meses), con corrección manual */
+export function MapeoActividades({ tpId }) {
+  const datos = useContext(DatosDesempeno)
+  const recargar = useContext(RecargaDesempeno)
+  const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId }) : null), [datos, tpId])
+  const [guardando, setGuardando] = useState(null)
+  if (!d?.ligado || !d.proyLigado) return null
+  const p = d.proyLigado
+  const discs = [...(p.disciplines || [])].sort((a, b) => a.sort_order - b.sort_order)
+  const conceptoKey = new Map(discs.flatMap(x => (x.concepts || []).map(c => [c.id, c])))
+  const ov = new Map((datos.overrides || []).filter(o => o.project_id === p.id).map(o => [Number(o.actividad_id), o]))
+  const filas = [...d.ligado.actividades.values()].filter(a => a.horas > 0.01).sort((a, b) => b.horas - a.horas)
+
+  async function cambiar(act, valor) {
+    setGuardando(act.id)
+    let res
+    if (!valor) res = await supabase.from('track_actividad_concepto').delete().eq('actividad_id', act.id)
+    else {
+      const fila = { actividad_id: act.id, project_id: p.id, concepto_id: null, disciplina_id: null, ignorar: false }
+      if (valor === 'ignorar') fila.ignorar = true
+      else if (valor.startsWith('c:')) fila.concepto_id = valor.slice(2)
+      else if (valor.startsWith('d:')) fila.disciplina_id = valor.slice(2)
+      res = await supabase.from('track_actividad_concepto').upsert(fila)
+    }
+    setGuardando(null)
+    if (res.error) { toast('No se pudo guardar: solo el líder del proyecto o un coordinador puede corregir el ligado', true); return }
+    toast('Ligado actualizado')
+    recargar()
+  }
+  const valorDe = id => { const o = ov.get(id); return !o ? '' : o.ignorar ? 'ignorar' : o.concepto_id ? 'c:' + o.concepto_id : o.disciplina_id ? 'd:' + o.disciplina_id : '' }
+
+  return (
+    <div className="dsp-mapeo">
+      <p className="dsp-nota">Todo el equipo, últimos 12 meses. <b>Palabra clave</b> = el nombre coincide con un concepto · <b>Reparto por mes</b> = se reparte entre los conceptos de la fase cobrados ese mes (est.) · <b>Solo fase</b> = no hubo concepto cobrado al cual atribuirla. Una corrección manual manda sobre lo automático.</p>
+      <div className="dsp-tabla-wrap">
+        <table className="dsp-tabla">
+          <thead><tr><th>Actividad de Toggl</th><th className="n">Horas</th><th>Se ligó a</th><th>Cómo</th><th>Confianza</th><th className="no-print">Corregir</th></tr></thead>
+          <tbody>
+            {filas.map(a => {
+              const cs = Object.entries(a.horasConcepto).sort((x, y) => y[1] - x[1])
+              const destino = cs.length
+                ? cs.slice(0, 3).map(([cid, h]) => `${conceptoKey.get(cid)?.key || '?'} (${num(h, 1)} h)`).join(', ') + (cs.length > 3 ? ` +${cs.length - 3}` : '')
+                : a.metodo === 'ignorada' ? 'Ignorada' : a.disciplinas.length ? `Fase: ${a.disciplinas.slice(0, 2).join(' · ')}` : 'Sin ligar'
+              const detalle = cs.map(([cid, h]) => `${conceptoKey.get(cid)?.key} ${conceptoKey.get(cid)?.description}: ${hrs(h, 1)}`).join('\n')
+              return (
+                <tr key={a.id}>
+                  <td className="desc" title={a.nombre}>{a.nombre}</td>
+                  <td className="n">{hrs(a.horas, 1)}</td>
+                  <td title={detalle}>{destino}{a.horasFase > 0.05 && cs.length ? <span className="sub"> · {hrs(a.horasFase, 1)} en la fase</span> : null}</td>
+                  <td className="sub">{ETIQUETA_METODO[a.metodo]}</td>
+                  <td><span className={`dsp-conf ${a.confianza}`}>{CONF[a.confianza]}</span></td>
+                  <td className="no-print">
+                    <select className="input dsp-sel" value={valorDe(a.id)} disabled={guardando === a.id} onChange={e => cambiar(a, e.target.value)} aria-label={`Corregir ligado de ${a.nombre}`}>
+                      <option value="">Automático</option>
+                      <option value="ignorar">No ligar (ignorar)</option>
+                      <optgroup label="Repartir en una fase">{discs.map(x => <option key={x.id} value={'d:' + x.id}>{x.name}</option>)}</optgroup>
+                      {discs.map(x => (x.concepts || []).length ? <optgroup key={x.id} label={x.name}>{[...x.concepts].sort((a2, b2) => a2.sort_order - b2.sort_order).map(c => <option key={c.id} value={'c:' + c.id}>{c.key} {String(c.description).slice(0, 60)}</option>)}</optgroup> : null)}
+                    </select>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
 export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }) {
   const datos = useContext(DatosDesempeno)
   const clavMeses = meses.join(',')
   const d = useMemo(() => (datos ? detalleProyecto(datos, { tpId, email, meses: clavMeses ? clavMeses.split(',') : undefined }) : null), [datos, tpId, email, clavMeses])
   const [todos, setTodos] = useState(false)
+  const [verMapeo, setVerMapeo] = useState(false)
   const [nombres, setNombres] = useState({})
   const idsAct = (d?.enTrack || []).filter(x => x.actividadId && !x.conceptoId).map(x => String(x.actividadId)).join(',')
   useEffect(() => {
@@ -234,8 +319,8 @@ export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }
   const cobConcepto = conHoras.reduce((a, c) => a + c.cobrado, 0)
   const hOtras = otras.reduce((a, x) => a + x.horas, 0)
   // Toggl: cada actividad con sus horas; lo que no trae actividad queda en un renglón aparte
-  const hTogglAct = d.togglAct.reduce((a, x) => a + x.horas, 0)
-  const hToggl = Math.max(0, d.horasTogglPeriodo - hTogglAct)
+  const hToggl = Math.max(0, d.horasTogglPeriodo - d.horasTogglAct)
+  const hLigadas = conHoras.reduce((a, c) => a + c.horasToggl, 0)
   const phReal = hConcepto > 0 && cobConcepto > 0 ? cobConcepto / hConcepto : null
   const planes = [...new Set(conHoras.map(c => planDe(c.area)).filter(Boolean))]
   const phPlan = planes.length === 1 ? planes[0] : null
@@ -253,7 +338,7 @@ export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }
 
       <div className="dsp-datos">
         <Dato etiqueta="Sus horas" valor={hrs(horasPeriodo, 1)} nota={meses.length > 1 ? 'últimos 12 meses' : textoMes(datos.mes)} />
-        <Dato etiqueta="Con concepto" valor={hrs(hConcepto, 1)} nota={horasPeriodo > 0 ? `${pct(hConcepto / horasPeriodo)} de sus horas` : 'registradas en Track'} />
+        <Dato etiqueta="Con concepto" valor={hrs(hConcepto, 1)} nota={hLigadas > 0.05 ? `${hrs(hLigadas, 1)} ligadas desde Toggl` : horasPeriodo > 0 ? `${pct(hConcepto / horasPeriodo)} de sus horas` : 'registradas en Track'} />
         <Dato etiqueta="Cobrado de esos conceptos" valor={dinero(cobConcepto, d.moneda)} />
         <Dato etiqueta="$/h real" valor={dinero(phReal, d.moneda)} nota="cobrado ÷ horas" tono={phReal != null && phPlan ? tono(phReal / phPlan) : ''} />
         {phPlan != null && <Dato etiqueta="$/h plan" valor={dinero(phPlan, d.moneda)} nota="contratado ÷ H-H (RC-OP-43)" />}
@@ -268,7 +353,7 @@ export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }
           return (
             <li key={c.id}>
               <span className="que" title={`${c.descripcion} · ${c.disciplina}`}><b style={{ borderColor: COLOR_AREA[c.area] }}>{c.key}</b>{c.descripcion}</span>
-              <span className="h"><i style={{ width: `${c.horas / maxH * 90}px` }} />{hrs(c.horas, 1)}</span>
+              <span className="h" title={origenTexto(c)}><i style={{ width: `${c.horas / maxH * 90}px` }} />{hrs(c.horas, 1)}{c.horasEstimadas > c.horas / 2 && <small className="dsp-est">est.</small>}</span>
               <span className="n">{c.cobrado > 0.5 ? dinero(c.cobrado, c.moneda) : <span className="sub">por cobrar</span>}</span>
               <span className={`n ${tono(rel)}`} title={plan ? `Plan ${dinero(plan, c.moneda)}/h` : ''}>{ph != null ? <>{dinero(ph, c.moneda)}{c.porHora == null && <small> pot.</small>}{rel != null && (rel >= 1 ? ' ▲' : ' ▼')}</> : '—'}</span>
             </li>
@@ -297,7 +382,13 @@ export function DesgloseConceptos({ tpId, email, meses = [], onAbrir, onCerrar }
         )}
         {!conHoras.length && !otras.length && !d.togglAct.length && hToggl <= 0.05 && <li className="otra"><span className="que sub">Sin horas en el periodo.</span></li>}
       </ul>
-      {!conHoras.length && <p className="dsp-nota">Las horas por concepto aparecen cuando se registra en Track eligiendo el concepto del contrato.</p>}
+      {!conHoras.length && <p className="dsp-nota">No hay horas ligadas a conceptos: este proyecto no tiene actividades de Toggl que se puedan ligar ni registros de Track con concepto.</p>}
+      {d.ligado && (
+        <>
+          <button className="btn btn-outline btn-sm no-print" style={{ marginTop: 8, marginRight: 6 }} onClick={() => setVerMapeo(!verMapeo)}>{verMapeo ? 'Ocultar' : 'Ver'} cómo se ligaron las actividades</button>
+          {verMapeo && <MapeoActividades tpId={tpId} />}
+        </>
+      )}
 
       {sinHoras.length > 0 && (
         <>

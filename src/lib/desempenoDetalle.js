@@ -11,6 +11,7 @@ import { supabase } from './supabase'
 import { duracionMs, mesDe, H } from './track'
 import { AREAS, estimationSummary, projectRates, conceptAmount, disciplineArea } from '../utils/calculations.js'
 import { prepararProyecto } from './proyecciones.js'
+import { ligar } from './mapeoActividades.js'
 
 export { AREAS }
 const lower = s => String(s || '').toLowerCase().trim()
@@ -93,7 +94,25 @@ export function detalleProyecto(datos, { tpId, projectId, email, meses } = {}) {
   }
   let horasTogglPeriodo = 0
   for (const r of historico) if (tpIds.has(String(r.proyecto_id)) && enMeses(r.mes) && deEllaToggl(r.email)) horasTogglPeriodo += (+r.segundos || 0) / 3600
-  const togglAct = Object.values(toggl).filter(x => x.horas > 0.01).sort((a, b) => b.horas - a.horas)
+  const togglActTodas = Object.values(toggl).filter(x => x.horas > 0.01).sort((a, b) => b.horas - a.horas)
+
+  // ── Ligado de las actividades de Toggl a conceptos (solo si hay un proyecto con alcance)
+  const proyLigado = proyecto || (deLaClave.length === 1 ? deLaClave[0] : null)
+  let ligado = null
+  if (proyLigado && (proyLigado.disciplines || []).length) {
+    const filas = []
+    for (const r of historicoAct) {
+      const a = r.track_actividades
+      if (!a || !tpIds.has(String(a.proyecto_id)) || !enMeses(r.mes) || !deEllaToggl(r.email)) continue
+      filas.push({ actividadId: r.actividad_id, mes: r.mes, horas: (+r.segundos || 0) / 3600 })
+    }
+    ligado = ligar(proyLigado, togglActTodas.map(x => ({ id: x.actividadId, nombre: x.nombre })), filas, (datos.overrides || []).filter(o => o.project_id === proyLigado.id))
+  }
+  // Lo que no se pudo ligar a un concepto sigue saliendo como actividad de Toggl
+  const togglAct = togglActTodas.map(x => {
+    const l = ligado?.actividades.get(Number(x.actividadId))
+    return l ? { ...x, horas: l.horasFase + l.horasSin, ligada: x.horas - l.horasFase - l.horasSin, metodo: l.metodo } : x
+  }).filter(x => x.horas > 0.01)
 
   // ── Dinero por área (todos los proyectos de la clave, como el RC-OP-43)
   const dinero = Object.fromEntries(AREAS.map(a => [a, { contratado: 0, cobrado: 0 }]))
@@ -140,11 +159,14 @@ export function detalleProyecto(datos, { tpId, projectId, email, meses } = {}) {
         const monto = conceptAmount(c, d, rates, disciplines)
         if (!(monto > 0.5)) continue
         const cobrado = Math.min(monto, acumMap[c.id] || 0)
-        const horas = porConcepto[c.id] || 0
+        const lc = ligado?.conceptos[c.id]
+        const horasTrack = porConcepto[c.id] || 0
+        const horas = horasTrack + (lc?.horas || 0)
         const hhPres = ar?.presupuestoHH && ar.contratado > 0 ? monto / ar.contratado * ar.presupuestoHH : null
         const avance = cobrado / monto
         conceptos.push({
-          id: c.id, key: c.key, descripcion: c.description, disciplina: d.name, area, proyecto: p.name, moneda: p.currency || 'MXN',
+          id: c.id, key: c.key, descripcion: c.description, horasTrack, horasToggl: lc?.horas || 0, horasEstimadas: lc?.estimadas || 0,
+          origenes: lc ? Object.entries(lc.origenes).map(([id, h]) => ({ nombre: ligado.actividades.get(Number(id))?.nombre || 'Actividad', h, metodo: ligado.actividades.get(Number(id))?.metodo })).sort((a, b) => b.h - a.h) : [], disciplina: d.name, area, proyecto: p.name, moneda: p.currency || 'MXN',
           monto, cobrado, avance, horas, hhPres,
           porHora: horas > 0 && cobrado > 0.5 ? cobrado / horas : null,
           porHoraPotencial: horas > 0 && !(cobrado > 0.5) ? monto / horas : null,
@@ -158,7 +180,7 @@ export function detalleProyecto(datos, { tpId, projectId, email, meses } = {}) {
 
   return {
     clave, titulo, proyecto, tp, moneda, areas, conceptos, baseMes, tieneRcOp43: Object.keys(pres).length > 0,
-    horasSinArea, generales, sinConcepto, togglAct, horasTogglPeriodo, enTrack: Object.values(enTrack).sort((a, b) => b.horas - a.horas), horasConcepto: Object.values(porConcepto).reduce((a, b) => a + b, 0),
+    horasSinArea, generales, sinConcepto, togglAct, horasTogglPeriodo, ligado, proyLigado, horasTogglAct: togglActTodas.reduce((t, x) => t + x.horas, 0), enTrack: Object.values(enTrack).sort((a, b) => b.horas - a.horas), horasConcepto: Object.values(porConcepto).reduce((a, b) => a + b, 0),
     personas: Object.values(personas).filter(x => x.total > 0.05).sort((a, b) => b.mes - a.mes || b.total - a.total),
     tpIds: [...tpIds], varios: deLaClave.length > 1,
   }
