@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtDate } from '../utils/format'
-import { incorporarAditivaAlContrato, nextNumber } from '../utils/aditivas'
+import { incorporarAditivaAlContrato, nextNumber, aditivaLabel, rutaAditivaAEstimacion } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole } from '../lib/directorio'
 import { useAjeno } from '../hooks/useAjeno'
@@ -26,6 +26,8 @@ export default function AditivaForm() {
   const [aditiva, setAditiva]     = useState(null)
   const [alcances, setAlcances]   = useState([emptyAlcance()])
   const [loading, setLoading]     = useState(true)
+  const aEstimacion = useRef(false)
+  const [ofrecer, setOfrecer]     = useState(null) // { number, total }: preguntar si se agrega a la estimación
   const [saving, setSaving]       = useState(false)
   const [modal, setModal]         = useState(null)
   const saveTimer = useRef(null)
@@ -122,16 +124,19 @@ export default function AditivaForm() {
       if (newAlc) setAlcances([...newAlc].sort((a, b) => a.sort_order - b.sort_order))
     }
 
+    let ofreciendo = false
     if (status === 'Aceptada') {
       const res = await incorporarAditivaAlContrato(id, { ...aditiva, status }, alcanceRows)
       if (res.error) toast('Aceptada, pero no se pudo sumar al contrato', true)
       else if (res.added) toast('Aditiva sumada al contrato ✓')
+      if (!res.error && (res.added || res.yaEnContrato)) { ofreciendo = true; setOfrecer({ number: aditiva.number, total: res.total || 0 }) }
     }
 
     setSaving(false)
     toast(markAs ? `Aditiva marcada como ${markAs} ✓` : 'Guardado ✓')
 
-    if (isNew) navigate(`/projects/${id}/aditivas/${aditivaId}/edit`, { replace: true })
+    // Si se va a preguntar por la estimación, no se cambia de ruta (se perdería la pregunta); ya tiene id, así que guardar de nuevo actualiza
+    if (isNew && !ofreciendo) navigate(`/projects/${id}/aditivas/${aditivaId}/edit`, { replace: true })
   }
 
   if (loading) return <div className="main"><div className="spinner" /></div>
@@ -338,6 +343,12 @@ export default function AditivaForm() {
         </div>
       )}
 
+      {ofrecer && (
+        <Modal title="¿Agregarla a la estimación?" cancelText="Ahora no" confirmText="Sí, agregarla"
+          body={`La <b>${aditivaLabel(ofrecer.number)}</b> ya está en el contrato${ofrecer.total ? ` (${fmtMoney(ofrecer.total, project.currency)})` : ''}. ¿Quieres marcar sus conceptos en el borrador de estimación de este periodo? Después puedes ajustar o quitar lo que no toque cobrar.`}
+          onConfirm={() => { aEstimacion.current = true; navigate(rutaAditivaAEstimacion(id, ofrecer.number)) }}
+          onClose={() => { setOfrecer(null); if (isNew && aditiva.id && !aEstimacion.current) navigate(`/projects/${id}/aditivas/${aditiva.id}/edit`, { replace: true }) }} />
+      )}
       {modal && <Modal title={modal.title} body={modal.body} confirmText="Confirmar" onConfirm={modal.onConfirm} onClose={() => setModal(null)} />}
     </div>
   )

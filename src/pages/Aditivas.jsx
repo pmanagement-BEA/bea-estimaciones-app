@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import { toast } from '../components/Toast'
 import Modal from '../components/Modal'
 import { fmtMoney, fmtDate } from '../utils/format'
-import { incorporarAditivaAlContrato } from '../utils/aditivas'
+import { incorporarAditivaAlContrato, aditivaLabel, rutaAditivaAEstimacion } from '../utils/aditivas'
 import { useAuth } from '../hooks/useAuth'
 import { isReadOnlyRole } from '../lib/directorio'
 import { useAjeno } from '../hooks/useAjeno'
@@ -29,6 +29,7 @@ export default function Aditivas() {
   const [aditivas, setAditivas] = useState([])
   const [loading, setLoading]   = useState(true)
   const [modal, setModal]       = useState(null)
+  const [ofrecer, setOfrecer] = useState(null) // { number, total }: preguntar si se agrega a la estimación
   const [dateModal, setDateModal] = useState(null) // { aditivaId, newStatus, oldStatus }
   const [decisionDate, setDecisionDate] = useState('')
 
@@ -82,6 +83,7 @@ export default function Aditivas() {
     if (newStatus === 'Aceptada') {
       const res = await incorporarAditivaAlContrato(id, aditiva, aditiva.aditiva_alcances)
       if (res.error) { toast('Aceptada, pero no se pudo sumar al contrato', true); return }
+      if (res.added || res.yaEnContrato) setOfrecer({ number: aditiva.number, total: res.total || 0 })
       if (res.added) { toast(`Aditiva aceptada y sumada al contrato (${fmtMoney(res.total, project.currency)}) ✓`); return }
     }
     toast(`Aditiva → ${newStatus}`)
@@ -233,6 +235,11 @@ export default function Aditivas() {
         </div>
       )}
 
+      {ofrecer && (
+        <Modal title="¿Agregarla a la estimación?" cancelText="Ahora no" confirmText="Sí, agregarla"
+          body={`La <b>${aditivaLabel(ofrecer.number)}</b> ya está en el contrato${ofrecer.total ? ` (${fmtMoney(ofrecer.total, project.currency)})` : ''}. ¿Quieres marcar sus conceptos en el borrador de estimación de este periodo? Después puedes ajustar o quitar lo que no toque cobrar.`}
+          onConfirm={() => navigate(rutaAditivaAEstimacion(id, ofrecer.number))} onClose={() => setOfrecer(null)} />
+      )}
       {modal && <Modal title={modal.title} body={modal.body} confirmText="Eliminar" onConfirm={modal.onConfirm} onClose={() => setModal(null)} />}
     </div>
   )
