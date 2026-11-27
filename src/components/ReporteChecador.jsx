@@ -113,7 +113,12 @@ export default function ReporteChecador() {
         <span className="sub">{desde === hasta ? textoDia(desde) : `${textoDia(desde)} – ${textoDia(hasta)}`} · retardo = entrada después de las {HORARIO.inicio} + {TOLERANCIA_MIN} min · salida esperada {HORARIO.fin}</span>
       </div>
       {error && <div className="card" style={{ color: '#C53030' }}>No se pudo cargar: {error}</div>}
-      {!r ? <div className="spinner" /> : (
+      {!r ? <div className="spinner" /> : !datos.checadas?.length ? (
+        <div className="card rd-sec">
+          <h3>Aún no hay checadas en este periodo</h3>
+          <p className="sub">Nadie ha checado entrada o salida en el Checador de la app entre {textoDia(desde)} y {textoDia(hasta)}. Cuando el equipo empiece a checar aquí, este reporte mostrará asistencia, faltas, retardos y salidas antes de tiempo.</p>
+        </div>
+      ) : (
         <>
           <div className="summary-grid rd-kpis">
             <div className="stat-box"><div className="stat-label">Asistencia</div><div className="stat-value">{pct(t.asistio, t.habiles)}</div><div className="stat-sub">{t.asistio} de {t.habiles} días hábiles · {t.ausencias} con ausencia</div></div>
