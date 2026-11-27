@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { estadosConceptos, etiquetaEstado } from '../lib/trackConcepto'
 import { cargarActividades, cargarConceptos } from '../lib/track'
@@ -69,7 +69,11 @@ export function useOpciones(proyecto) {
       .catch(() => vivo && setOps({ actividades: [], conceptos: [], generales: [] }))
     return () => { vivo = false }
   }, [proyecto?.id])
-  return ops
+  // Después de proyectar o marcar un concepto: vuelve a leer cómo va cada uno para actualizar las etiquetas
+  const recargarEstados = useCallback(() => {
+    if (proyecto?.project_id) estadosConceptos(proyecto.project_id).then(estados => setOps(o => ({ ...o, estados }))).catch(() => {})
+  }, [proyecto?.project_id])
+  return useMemo(() => ({ ...ops, recargarEstados }), [ops, recargarEstados])
 }
 
 export function SelectorActividad({ ops, valor, alCambiar }) {

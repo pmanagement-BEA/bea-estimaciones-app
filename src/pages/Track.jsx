@@ -127,7 +127,7 @@ function Registrar({ email, proyectos, porId }) {
         </div>
       )}
       {corriendo && <p className="ayuda" style={{ margin: '6px 0 0' }}>Corriendo desde las {hhmm(activo.inicio)} · {porId[activo.proyecto_id]?.nombre}</p>}
-      {act.startsWith('c:') && proy?.project_id && <AccionesConceptoTrack projectId={proy.project_id} conceptId={act.slice(2)} />}
+      {act.startsWith('c:') && proy?.project_id && <AccionesConceptoTrack projectId={proy.project_id} conceptId={act.slice(2)} onCambio={ops.recargarEstados} />}
 
       <div className="vista-trk" role="tablist">
         {[['calendario', '📅 Calendario'], ['lista', '☰ Lista']].map(([k, t]) => <button key={k} className={vistaReg === k ? 'activa' : ''} onClick={() => cambiarVista(k)}>{t}</button>)}

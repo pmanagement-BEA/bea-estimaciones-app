@@ -83,7 +83,7 @@ function FormRegistro({ datos, proyectos, porId, alCerrar, alGuardar }) {
         <input ref={ref} className="desc" value={desc} onChange={e => setDesc(e.target.value)} placeholder="¿Qué hiciste?" aria-label="Descripción" />
         <BuscadorProyecto proyectos={proyectos} valor={proy?.id} alElegir={p => { setProy(p); setAct(''); setFact(p.facturable) }} />
         <SelectorActividad ops={ops} valor={act} alCambiar={setAct} />
-        {act.startsWith('c:') && proy?.project_id && <AccionesConceptoTrack projectId={proy.project_id} conceptId={act.slice(2)} />}
+        {act.startsWith('c:') && proy?.project_id && <AccionesConceptoTrack projectId={proy.project_id} conceptId={act.slice(2)} onCambio={ops.recargarEstados} />}
         <div className="horas-cal-trk">
           <input type="date" value={fecha} onChange={e => setFecha(e.target.value)} aria-label="Fecha" />
           <input type="time" value={desde} onChange={e => setDesde(e.target.value)} aria-label="Desde" />
