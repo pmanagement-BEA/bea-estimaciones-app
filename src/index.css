@@ -1200,3 +1200,22 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .rd-regs .hora{font-variant-numeric:tabular-nums;color:var(--text-soft)}
 .rd-nota{font-size:11px;color:var(--text-muted)}
 @media (max-width:760px){ .rd-proy li{grid-template-columns:1fr 70px} .rd-proy .rd-barra,.rd-proy .sub{display:none} .rd-falta li{grid-template-columns:1fr 110px} .rd-falta li>:nth-child(2),.rd-falta li>:nth-child(3),.rd-falta li>:nth-child(6){display:none} .rd-regs li{grid-template-columns:80px 1fr 60px} .rd-regs .rd-tag{display:none} }
+/* Reporte diario: Track | Checador */
+.rd-fuente{display:inline-flex;gap:4px;padding:4px;border-radius:12px;background:var(--surface-2);margin:0 0 14px}
+.rd-fuente button{all:unset;cursor:pointer;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:700;color:var(--text-soft)}
+.rd-fuente button.activa{background:var(--card);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.rd-fuente button:focus-visible{outline:2px solid var(--green)}
+.rc-periodo{margin-bottom:12px}
+.rc-periodo .sub{margin-left:8px;font-size:11.5px;color:var(--text-muted)}
+.rc-alertas{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.rc-lista{list-style:none;margin:0;padding:0}
+.rc-lista li{display:grid;grid-template-columns:150px 110px 1fr;gap:8px;padding:5px 0;border-top:1px solid var(--border);font-size:12.5px}
+.rc-marcas{display:inline-flex;flex-wrap:wrap;gap:4px}
+.rd-estado.gris{background:var(--surface-2);color:var(--text-muted)}
+.rd-area.estatica{cursor:default}.rd-area.estatica:hover{transform:none;filter:none}
+.rc-tarde,.rc-dias .tarde{color:#b07d00;font-weight:700}
+.rc-neg,.rc-dias .neg{color:#C53030}
+.rc-dias{list-style:none;margin:0;padding:0}
+.rc-dias li{display:grid;grid-template-columns:110px 70px 90px 90px 110px;gap:10px;padding:4px 0;border-top:1px solid var(--border);font-size:12.5px;font-variant-numeric:tabular-nums}
+.rc-dias .n{text-align:right}
+@media (max-width:700px){ .rc-lista li{grid-template-columns:1fr 1fr} .rc-lista li>.sub{display:none} .rc-dias li{grid-template-columns:90px 60px 70px 70px} .rc-dias li>:last-child{display:none} }

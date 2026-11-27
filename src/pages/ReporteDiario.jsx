@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { puedeVerReporteDiario, prepararCalendario, diaHabilAnterior, cargarDia, calcularDia } from '../lib/reporteDiario'
 import { textoHoras, textoDiaLargo, sumarDias, hhmm, diaIso, nombreDia } from '../lib/checador'
 import { nombreCorto } from '../lib/proyecciones'
+import ReporteChecador from '../components/ReporteChecador'
 
 const COLOR = { 'Consultoría': '#0B3D24', 'Commissioning': '#4A1320', 'Modelación': '#0E1F3D', 'Dirección / PMO': '#3A3E45', 'Sin área': '#7B8794' }
 const h = ms => textoHoras(ms || 0)
@@ -85,6 +86,8 @@ export default function ReporteDiario() {
   const [error, setError] = useState('')
   const [vista, setVista] = useState('empresa')
   const [area, setArea] = useState(null)
+  const [fuente, setFuente] = useState(() => { try { return localStorage.getItem('rd_fuente') || 'track' } catch { return 'track' } })
+  useEffect(() => { try { localStorage.setItem('rd_fuente', fuente) } catch { /* sin almacenamiento */ } }, [fuente])
 
   useEffect(() => { puedeVerReporteDiario().then(setPermiso) }, [])
   useEffect(() => {
@@ -119,6 +122,10 @@ export default function ReporteDiario() {
         </div>
       </div>
 
+      <div className="rd-fuente" role="tablist" aria-label="Qué reporte ver">
+        {[['track', 'Track · horas por proyecto'], ['checador', 'Checador · asistencia']].map(([k, txt]) => <button key={k} role="tab" aria-selected={fuente === k} className={fuente === k ? 'activa' : ''} onClick={() => setFuente(k)}>{txt}</button>)}
+      </div>
+      {fuente === 'checador' ? (fecha && <ReporteChecador fecha={fecha} />) : (<>
       {error && <div className="card" style={{ color: '#C53030' }}>No se pudo cargar: {error}</div>}
       {!r ? <div className="spinner" /> : (
         <>
@@ -184,6 +191,7 @@ export default function ReporteDiario() {
           <p className="rd-nota">Le tocaba = 8 h en día hábil; 0 en fin de semana, festivo o con ausencia aprobada. Solo cuenta lo registrado en Track (lo de Toggl no llega por día).</p>
         </>
       )}
+      </>)}
     </div>
   )
 }
