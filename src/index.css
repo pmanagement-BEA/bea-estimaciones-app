@@ -1286,3 +1286,8 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .acc-concepto-trk .estados{display:flex;flex-wrap:wrap;gap:6px}
 .acc-concepto-trk .chip{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;background:rgba(183,121,31,.12);color:#9A6412}
 .acc-concepto-trk .chip.si{background:rgba(22,101,52,.12);color:var(--green-dark)}
+
+/* RH: vacaciones */
+.chip-sin-goce{display:inline-block;margin-left:6px;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:rgba(197,48,48,.10);color:#C53030}
+.ayuda-rh{font-size:12.5px;color:var(--text-soft);background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin:8px 0}
+.ingreso-rh{font-size:12px;padding:2px 4px;border:1px solid var(--border);border-radius:6px;background:var(--bg, #fff);color:var(--text)}

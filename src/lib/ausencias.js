@@ -23,8 +23,10 @@ export const textoDias = n => `${+n % 1 ? (+n).toFixed(1) : +n} ${Math.abs(+n) =
 export function saldo(motivoId, asignaciones, ausencias) {
   const hoy = diaIso()
   const asignados = asignaciones.filter(a => a.motivo_id === motivoId && (!a.fin || a.fin >= hoy)).reduce((s, a) => s + +a.dias, 0)
-  const dispuestos = ausencias.filter(a => a.motivo_id === motivoId && a.estado === 'aprobada').reduce((s, a) => s + +a.dias, 0)
-  const pendientes = ausencias.filter(a => a.motivo_id === motivoId && a.estado === 'pendiente').reduce((s, a) => s + +a.dias, 0)
+  // Lo que fue sin goce de sueldo no se descuenta del saldo
+  const conGoce = a => +a.dias - (+a.dias_sin_goce || 0)
+  const dispuestos = ausencias.filter(a => a.motivo_id === motivoId && a.estado === 'aprobada').reduce((s, a) => s + conGoce(a), 0)
+  const pendientes = ausencias.filter(a => a.motivo_id === motivoId && a.estado === 'pendiente').reduce((s, a) => s + conGoce(a), 0)
   return { asignados, dispuestos, pendientes, disponibles: asignados - dispuestos - pendientes }
 }
 
@@ -43,4 +45,25 @@ export async function cargarAusencias(email = null) {
   if (a.error) throw a.error
   if (s.error) throw s.error
   return { ausencias: a.data || [], asignaciones: s.data || [] }
+}
+
+/** Días de vacaciones por año cumplido (LFT art. 76, reforma 2023): 12, 14, 16, 18, 20 y luego +2 cada 5 años. */
+export function diasVacacionesLey(anios) {
+  if (anios < 1) return 0
+  if (anios <= 5) return 10 + 2 * anios
+  return 22 + 2 * Math.floor((anios - 6) / 5)
+}
+
+/** Años cumplidos desde la fecha de ingreso. */
+export function antiguedad(fechaIngreso, hoy = diaIso()) {
+  if (!fechaIngreso) return null
+  const [y1, m1, d1] = fechaIngreso.split('-').map(Number), [y2, m2, d2] = hoy.split('-').map(Number)
+  return y2 - y1 - (m2 < m1 || (m2 === m1 && d2 < d1) ? 1 : 0)
+}
+
+/** Fechas de ingreso (la propia, o todas si es administrador): { email: 'YYYY-MM-DD' } */
+export async function cargarIngresos() {
+  const { data, error } = await supabase.from('rh_ingresos').select('email, fecha_ingreso')
+  if (error) return {}
+  return Object.fromEntries((data || []).map(r => [r.email, r.fecha_ingreso]))
 }

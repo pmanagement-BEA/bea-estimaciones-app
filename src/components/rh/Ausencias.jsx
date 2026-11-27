@@ -72,7 +72,13 @@ export function FormAusencia({ motivos, email, personas = null, asignaciones = [
           {f.inicio && (
             <div className={`resumen-dias ${n === 0 ? 'cero' : ''}`}>
               {n === 0 ? 'En esas fechas no hay días laborables.' : <>Son <b>{textoDias(n)} laborables</b> (sin fines de semana ni festivos).</>}
-              {s && n > 0 && s.disponibles - n < 0 && <div className="aviso">⚠ Te quedarías con {textoDias(s.disponibles - n)}: se puede solicitar, pero quien aprueba lo verá.</div>}
+              {s && n > 0 && !propias.a.some(x => x.motivo_id === m.id) && <div className="aviso">Tu saldo de {m.nombre.toLowerCase()} todavía no está cargado en la app: la solicitud se envía normal y RH la revisa.</div>}
+              {s && n > 0 && propias.a.some(x => x.motivo_id === m.id) && s.disponibles - n < 0 && (() => {
+                const conGoce = Math.max(0, Math.min(n, s.disponibles))
+                return <div className="aviso">⚠ {conGoce > 0
+                  ? <>Tienes {textoDias(s.disponibles)} de {m.nombre.toLowerCase()}: <b>{textoDias(conGoce)} con goce</b> y <b>{textoDias(n - conGoce)} sin goce de sueldo</b>.</>
+                  : <>No tienes días de {m.nombre.toLowerCase()} disponibles: <b>los {textoDias(n)} serán sin goce de sueldo</b>.</>}</div>
+              })()}
             </div>
           )}
           <label className="campo">Observaciones (opcional)
@@ -98,7 +104,7 @@ export function ListaSolicitudes({ lista, motivosPorId, nombres = {}, mostrarPer
         <li key={a.id} className={a.estado}>
           <div className="izq">
             {mostrarPersona && <div className="persona">{nombres[a.email] || a.email}</div>}
-            <div className="linea"><ChipMotivo m={motivosPorId[a.motivo_id]} /><span className="dias">{textoDias(a.dias)}</span></div>
+            <div className="linea"><ChipMotivo m={motivosPorId[a.motivo_id]} /><span className="dias">{textoDias(a.dias)}</span>{+a.dias_sin_goce > 0 && <span className="chip-sin-goce">{textoDias(a.dias_sin_goce)} sin goce de sueldo</span>}</div>
             <div className="fechas"><Periodo a={a} /></div>
             {a.observaciones && <div className="obs">“{a.observaciones}”</div>}
             {a.resuelto_por && a.estado !== 'pendiente' && (
