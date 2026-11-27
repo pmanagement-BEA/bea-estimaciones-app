@@ -1277,3 +1277,9 @@ input[type=color]{width:34px;height:30px;border:1px solid var(--border);border-r
 .rpt-area.captura .est{color:#B7791F}
 .rpt-area.sel{border-color:var(--green);box-shadow:0 0 0 2px rgba(34,139,34,.15)}
 .rpt-lider .btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* Track: acciones del concepto (proyecciones / borrador) */
+.acc-concepto-trk{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 12px;margin-top:8px;padding:8px 12px;border:1px dashed var(--border);border-radius:10px;background:var(--panel);font-size:12.5px}
+.acc-concepto-trk .txt{color:var(--text-soft)}
+.acc-concepto-trk .btns{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.acc-concepto-trk .hecho{font-weight:700;color:var(--green-dark);font-size:12px}
