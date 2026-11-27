@@ -14,9 +14,23 @@ const norm = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLow
 const lower = s => String(s || '').toLowerCase().trim()
 
 /** ¿La persona que entró puede ver el reporte? */
+// Al recargar la página la consulta puede salir antes de que la sesión esté lista y responder "no":
+// se reintenta un par de veces y se recuerda el sí en la sesión del navegador.
 export async function puedeVerDesempeno() {
-  const { data, error } = await supabase.rpc('ve_desempeno')
-  return !error && data === true
+  try { if (sessionStorage.getItem('bea_ve_desempeno') === '1') return true } catch { /* sin almacenamiento */ }
+  for (let intento = 0; intento < 3; intento++) {
+    if (intento) await new Promise(r => setTimeout(r, 1200 * intento))
+    const { data, error } = await supabase.rpc('ve_desempeno')
+    if (!error && data === true) {
+      try { sessionStorage.setItem('bea_ve_desempeno', '1') } catch { /* sin almacenamiento */ }
+      return true
+    }
+    if (!error && data === false) {
+      const { data: s } = await supabase.auth.getSession()
+      if (s?.session) return false
+    }
+  }
+  return false
 }
 
 /** Días hábiles (lunes a viernes) de un mes, hasta hoy si es el mes en curso. */
